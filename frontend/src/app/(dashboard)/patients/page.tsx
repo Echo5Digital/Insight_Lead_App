@@ -27,9 +27,12 @@ function rowBg(status?: string) {
 }
 
 export default function PatientsPage() {
-  const { user }  = useAuth();
-  const isAdmin   = user?.role === 'admin';
-  const canWrite  = user?.role === 'admin' || user?.role === 'staff';
+  const { user }   = useAuth();
+  const isAdmin    = user?.role === 'admin';
+  const canWrite   = user?.role === 'admin' || user?.role === 'staff';
+
+  // Read initial filters from URL query params (e.g. from referrals page click)
+  const getParam = (key: string) => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(key) || '' : '';
 
   const [patients,  setPatients]  = useState<Patient[]>([]);
   const [total,     setTotal]     = useState(0);
@@ -43,12 +46,14 @@ export default function PatientsPage() {
   const [sortBy,    setSortBy]    = useState('createdAt');
   const [sortDir,   setSortDir]   = useState<'asc'|'desc'>('desc');
 
-  // Filters
-  const [search,    setSearch]    = useState('');
-  const [status,    setStatus]    = useState('');
-  const [insurance, setInsurance] = useState('');
-  const [category,  setCategory]  = useState('');
-  const [source,    setSource]    = useState('');
+  // Filters — pre-filled from URL query params when navigating from referrals/dashboard
+  const [search,    setSearch]    = useState(() => getParam('search'));
+  const [status,    setStatus]    = useState(() => getParam('status'));
+  const [insurance, setInsurance] = useState(() => getParam('insurance'));
+  const [category,  setCategory]  = useState(() => getParam('category'));
+  const [source,    setSource]    = useState(() => getParam('referralSource'));
+  const [dateFrom,  setDateFrom]  = useState(() => getParam('dateFrom'));
+  const [dateTo,    setDateTo]    = useState(() => getParam('dateTo'));
   const [needsName, setNeedsName] = useState(false);
 
   const loadPatients = useCallback(async () => {
@@ -60,12 +65,14 @@ export default function PatientsPage() {
       if (insurance) params.set('insurance',      insurance);
       if (category)  params.set('category',       category);
       if (source)    params.set('referralSource', source);
+      if (dateFrom)  params.set('dateFrom',       dateFrom);
+      if (dateTo)    params.set('dateTo',         dateTo);
       if (needsName) params.set('needsName',      'true');
       const data = await api.get<{ patients: Patient[]; total: number; pages: number }>(`/patients?${params}`);
       setPatients(data.patients); setTotal(data.total); setPages(data.pages);
     } catch { toast.error('Failed to load patients'); }
     finally { setLoading(false); }
-  }, [page, search, status, insurance, category, source, needsName, sortBy, sortDir]);
+  }, [page, search, status, insurance, category, source, dateFrom, dateTo, needsName, sortBy, sortDir]);
 
   useEffect(() => { api.get<Settings>('/settings').then(setSettings).catch(() => {}); }, []);
   useEffect(() => { loadPatients(); }, [loadPatients]);

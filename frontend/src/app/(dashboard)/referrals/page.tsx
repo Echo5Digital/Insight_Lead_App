@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { PageSpinner } from '@/components/ui/Spinner';
@@ -130,6 +131,21 @@ export default function ReferralsPage() {
     };
   }, [filteredRows]);
 
+  const router = useRouter();
+
+  // Click a bar segment → go to patients filtered by that source + month
+  const handleBarClick = (data: Record<string, unknown>, source: string) => {
+    if (!data?.month) return;
+    const monthStr = data.month as string; // e.g. "Sep '25"
+    const [mon, yr] = monthStr.split(' ');
+    const monthIdx  = MONTHS.indexOf(mon) + 1;
+    const year      = parseInt('20' + yr.replace("'", ''));
+    if (!monthIdx || !year) return;
+    const from = new Date(year, monthIdx - 1, 1).toISOString().slice(0, 10);
+    const to   = new Date(year, monthIdx,     0).toISOString().slice(0, 10);
+    router.push(`/patients?referralSource=${encodeURIComponent(source)}&dateFrom=${from}&dateTo=${to}`);
+  };
+
   if (loading) return <div className="p-6"><PageSpinner /></div>;
 
   return (
@@ -199,8 +215,9 @@ export default function ReferralsPage() {
                   {srcList.map((src, i) => (
                     <Bar key={src} dataKey={src} stackId="a"
                       fill={BAR_COLORS[i % BAR_COLORS.length]}
-                      radius={i === srcList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      {/* Show total count only on the top (last) bar */}
+                      radius={i === srcList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      style={{ cursor: 'pointer' }}
+                      onClick={(data) => handleBarClick(data as Record<string, unknown>, src)}>
                       {i === srcList.length - 1 && (
                         <LabelList dataKey="_total" position="top"
                           style={{ fontSize: 11, fontWeight: 600, fill: '#475569' }} />
@@ -223,11 +240,12 @@ export default function ReferralsPage() {
           {ranked.map(([src, count], i) => {
             const pct = grandTotal > 0 ? Math.round((count / grandTotal) * 100) : 0;
             return (
-              <div key={src} className="flex items-center gap-3">
+              <div key={src} className="flex items-center gap-3 cursor-pointer group"
+                onClick={() => router.push(`/patients?referralSource=${encodeURIComponent(src)}`)}>
                 <span className="text-xs font-bold text-slate-300 w-5 text-right">{i + 1}</span>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-slate-700">{src}</span>
+                    <span className="text-sm font-medium text-slate-700 group-hover:text-brand transition-colors">{src}</span>
                     <span className="text-sm font-semibold text-slate-700">
                       {count} <span className="text-xs font-normal text-slate-400">({pct}%)</span>
                     </span>
