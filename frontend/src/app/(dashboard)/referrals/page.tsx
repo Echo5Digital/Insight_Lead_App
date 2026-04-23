@@ -133,10 +133,12 @@ export default function ReferralsPage() {
 
   const router = useRouter();
 
-  // Click a bar segment → go to patients filtered by that source + month
-  const handleBarClick = (data: Record<string, unknown>, source: string) => {
-    if (!data?.month) return;
-    const monthStr = data.month as string; // e.g. "Sep '25"
+  // Chart-level click → navigate to patients filtered by clicked source + month
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleChartClick = (chartData: any) => {
+    if (!chartData?.activeLabel || !chartData?.activePayload?.[0]) return;
+    const monthStr = chartData.activeLabel as string;           // e.g. "Apr '26"
+    const source   = chartData.activePayload[0].name as string; // e.g. "Life Psych"
     const [mon, yr] = monthStr.split(' ');
     const monthIdx  = MONTHS.indexOf(mon) + 1;
     const year      = parseInt('20' + yr.replace("'", ''));
@@ -203,7 +205,8 @@ export default function ReferralsPage() {
           {chartData.length === 0
             ? <div className="flex items-center justify-center h-48 text-sm text-slate-400">No referral data for this period</div>
             : <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
+                  onClick={handleChartClick} style={{ cursor: 'pointer' }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -215,9 +218,7 @@ export default function ReferralsPage() {
                   {srcList.map((src, i) => (
                     <Bar key={src} dataKey={src} stackId="a"
                       fill={BAR_COLORS[i % BAR_COLORS.length]}
-                      radius={i === srcList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                      style={{ cursor: 'pointer' }}
-                      onClick={(data) => handleBarClick(data as Record<string, unknown>, src)}>
+                      radius={i === srcList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
                       {i === srcList.length - 1 && (
                         <LabelList dataKey="_total" position="top"
                           style={{ fontSize: 11, fontWeight: 600, fill: '#475569' }} />
