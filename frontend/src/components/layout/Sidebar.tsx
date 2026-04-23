@@ -132,26 +132,23 @@ export default function Sidebar() {
       collapsed ? 'w-16' : 'w-60'
     )}>
       {/* Logo */}
-      <div className={cn('flex items-center border-b border-white/10 flex-shrink-0', collapsed ? 'justify-center px-2 h-14' : 'px-4 h-16')}>
+      <div className={cn('flex items-center justify-center border-b border-white/10 flex-shrink-0', collapsed ? 'px-2 h-14' : 'px-3 h-20')}>
         {!collapsed
-          ? <img
-              src="/logo.png"
-              alt="Insightful Mind Psychological Services"
-              className="h-10 w-auto object-contain"
-              onError={e => {
-                // Fallback to text if image not found
-                const el = e.currentTarget as HTMLImageElement;
-                el.style.display = 'none';
-                el.nextElementSibling?.removeAttribute('style');
-              }}
-            />
-          : <span className="text-brand font-bold text-lg">IM</span>
+          ? <div className="bg-white rounded-xl px-3 py-2 w-full flex items-center justify-center">
+              <img
+                src="/image.png"
+                alt="Insightful Mind Psychological Services"
+                className="h-12 w-auto object-contain"
+              />
+            </div>
+          : <div className="bg-white rounded-lg p-1">
+              <img
+                src="/image.png"
+                alt="Insightful Mind"
+                className="h-8 w-8 object-contain object-left"
+              />
+            </div>
         }
-        {!collapsed && (
-          <div style={{ display: 'none' }}>
-            <span className="text-[17px] font-bold text-white">Insight<span className="text-brand">Lead</span></span>
-          </div>
-        )}
       </div>
 
       {/* Collapse toggle */}
