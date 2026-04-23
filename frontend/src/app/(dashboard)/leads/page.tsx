@@ -186,9 +186,11 @@ export default function LeadsPage() {
                   <tr><td colSpan={8} className="table-td text-center py-12 text-slate-400">No leads found</td></tr>
                 )}
                 {leads.map(lead => (
-                  <tr key={lead._id} className={cn('transition-colors', rowColor(lead))}>
+                  <tr key={lead._id}
+                    onClick={() => { setEditLead(lead); setEditData({ name: lead.name, email: lead.email, phone: lead.phone, insurance: lead.insurance, referralSource: lead.referralSource, notes: lead.notes }); }}
+                    className={cn('transition-colors cursor-pointer', rowColor(lead))}>
                     <td className="table-td">
-                      <div className="font-medium text-slate-900">{lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—'}</div>
+                      <div className="font-medium text-slate-900 hover:text-brand">{lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—'}</div>
                       <div className="text-xs text-slate-400">{lead.email || ''}</div>
                     </td>
                     <td className="table-td text-slate-600">{lead.phone || '—'}</td>
@@ -206,7 +208,7 @@ export default function LeadsPage() {
                         : <StatusBadge status={lead.status || 'New'} />
                       }
                     </td>
-                    <td className="table-td">
+                    <td className="table-td" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1.5">
                         {canWrite && !lead.convertedToPatient && (
                           <>
