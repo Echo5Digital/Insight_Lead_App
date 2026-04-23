@@ -110,7 +110,7 @@ export default function PatientDetailPage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="page-title">{patient.name}</h1>
+            <h1 className="page-title">{patient.name || <span className="text-amber-500">⚠ Name needed</span>}</h1>
             <div className="flex items-center gap-2 mt-1">
               <StatusBadge status={patient.status || ''} />
               {patient.category === 'Pain Management' && (

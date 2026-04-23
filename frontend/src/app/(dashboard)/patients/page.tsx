@@ -212,14 +212,14 @@ export default function PatientsPage() {
                     )}
                     <td className="table-td" onClick={() => window.location.href = `/patients/${p._id}`}>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900 hover:text-brand cursor-pointer">{p.name || '—'}</span>
-                        {p.needsName && (
-                          <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
-                            ⚠ Needs name
-                          </span>
-                        )}
+                        {p.needsName
+                          ? <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-full font-semibold whitespace-nowrap cursor-pointer">
+                              ⚠ Add name
+                            </span>
+                          : <span className="font-medium text-slate-900 hover:text-brand cursor-pointer">{p.name || '—'}</span>
+                        }
                       </div>
-                      <div className="text-xs text-slate-400">{p.email || ''}</div>
+                      <div className="text-xs text-slate-400">{p.email || p.insurance || ''}</div>
                     </td>
                     <td className="table-td text-slate-600 text-xs">{p.insurance || '—'}</td>
                     <td className="table-td text-slate-600 text-xs">{p.referralSource || '—'}</td>
