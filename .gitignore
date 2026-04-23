@@ -1,5 +1,10 @@
 node_modules/
 .env
+.env.local
 *.zip
 .DS_Store
 Thumbs.db
+Lead_Patient_Dashboard_Spec.docx
+Patient Tracking Dashboard - Stahl Edits v3 (1) (1).xlsm
+frontend/.next/
+frontend/node_modules/
