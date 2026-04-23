@@ -24,10 +24,10 @@ export default function NewPatientPage() {
   const { user }     = useAuth();
 
   // Pre-fill category from query param (e.g. ?category=Pain+Management)
-  const initialCategory = searchParams.get('category') || 'Standard';
+  const rawCategory = searchParams.get('category') || 'Standard';
 
   const [step,     setStep]     = useState(0);
-  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: initialCategory });
+  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: rawCategory as Patient['category'] });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving,   setSaving]   = useState(false);
 
@@ -67,7 +67,7 @@ export default function NewPatientPage() {
           <ArrowLeft size={18} />
         </button>
         <h1 className="page-title">
-          Add New {initialCategory === 'Pain Management' ? 'Pain Management ' : ''}Patient
+          Add New {rawCategory === 'Pain Management' ? 'Pain Management ' : ''}Patient
         </h1>
       </div>
 
