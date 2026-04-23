@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InsightLead — Test Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #2d3748;
+      color: #fff;
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: #68d391; }
+    .badge {
+      font-size: 11px;
+      background: #4a5568;
+      padding: 3px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+    }
+
+    /* ── Status dot ── */
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #718096;
+      transition: background 0.3s;
+    }
+    .status-dot.ok      { background: #68d391; box-shadow: 0 0 6px #68d391; }
+    .status-dot.error   { background: #fc8181; }
+    .status-dot.checking{ background: #f6ad55; }
+    .status-text { font-size: 13px; color: #a0aec0; }
+    .status-text.ok    { color: #68d391; }
+    .status-text.error { color: #fc8181; }
+
+    /* ── Main layout ── */
+    .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Cards row ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card-label {
+      font-size: 12px;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+    }
+    .card-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    .card-value.green { color: #38a169; }
+    .card-value.blue  { color: #3182ce; }
+
+    /* ── Connection panel ── */
+    .panel {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+      margin-bottom: 16px;
+    }
+    @media(max-width: 600px) { .setup-grid { grid-template-columns: 1fr; } }
+
+    .field-label {
+      font-size: 12px;
+      color: #718096;
+      margin-bottom: 4px;
+    }
+    .field-value {
+      font-size: 14px;
+      font-family: 'Menlo', 'Courier New', monospace;
+      background: #edf2f7;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: #2d3748;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .copy-btn {
+      font-size: 11px;
+      background: #e2e8f0;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+      color: #4a5568;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { background: #cbd5e0; }
+
+    /* ── Test button ── */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #3182ce; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #2b6cb0; }
+    .btn-danger  { background: #fc8181; color: #fff; font-size: 13px; padding: 8px 14px; }
+    .btn-danger:hover:not(:disabled) { background: #f56565; }
+
+    .test-result {
+      margin-top: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .test-result.ok    { background: #f0fff4; border: 1px solid #9ae6b4; color: #276749; }
+    .test-result.error { background: #fff5f5; border: 1px solid #feb2b2; color: #9b2c2c; }
+
+    /* ── Leads table ── */
+    .leads-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .leads-title {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .auto-badge {
+      font-size: 11px;
+      color: #718096;
+      background: #edf2f7;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+    .leads-actions { display: flex; gap: 10px; align-items: center; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 14px;
+    }
+    thead { background: #f7fafc; }
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #718096;
+      font-weight: 600;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f7fafc;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f7fafc; }
+
+    .lead-name { font-weight: 600; color: #2d3748; }
+    .lead-meta { font-size: 12px; color: #718096; margin-top: 2px; }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    .tag-source  { background: #ebf8ff; color: #2b6cb0; }
+    .tag-form    { background: #f0fff4; color: #276749; }
+    .time-text   { font-size: 12px; color: #a0aec0; white-space: nowrap; }
+    .delete-btn  {
+      background: none;
+      border: none;
+      color: #fc8181;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .delete-btn:hover { background: #fff5f5; }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: #a0aec0;
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-title { font-size: 18px; font-weight: 600; color: #718096; margin-bottom: 8px; }
+    .empty-sub   { font-size: 14px; }
+
+    /* ── Raw payload modal ── */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 680px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: #edf2f7;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    pre {
+      background: #1a202c;
+      color: #68d391;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ── Pulse animation for new lead ── */
+    @keyframes fadeIn {
+      from { background: #ebf8ff; }
+      to   { background: transparent; }
+    }
+    .new-lead { animation: fadeIn 2s ease-out; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Insight<span>Lead</span></div>
+    <span class="badge">TEST MODE</span>
+  </div>
+  <div class="header-right">
+    <span class="status-dot checking" id="statusDot"></span>
+    <span class="status-text checking" id="statusText">Checking...</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Stats cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total Leads</div>
+      <div class="card-value blue" id="statTotal">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Has Email</div>
+      <div class="card-value green" id="statEmail">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Has Phone</div>
+      <div class="card-value" id="statPhone">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Last Received</div>
+      <div class="card-value" style="font-size:18px" id="statLast">—</div>
+    </div>
+  </div>
+
+  <!-- Connection setup panel -->
+  <div class="panel">
+    <div class="panel-title">
+      WordPress Plugin Settings
+      <span style="font-size:12px;font-weight:400;color:#718096">— paste these into your WordPress plugin</span>
+    </div>
+    <div class="setup-grid">
+      <div>
+        <div class="field-label">API Endpoint URL</div>
+        <div class="field-value">
+          <span id="apiUrl">http://localhost:3001</span>
+          <button class="copy-btn" onclick="copy('http://localhost:3001', this)">Copy</button>
+        </div>
+      </div>
+      <div>
+        <div class="field-label">API Key</div>
+        <div class="field-value">
+          <span id="apiKey">test-api-key-123</span>
+          <button class="copy-btn" onclick="copy('test-api-key-123', this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="testBtn" onclick="testConnection()">Send Test Lead</button>
+    <div class="test-result" id="testResult"></div>
+  </div>
+
+  <!-- Leads table -->
+  <div class="panel" style="padding:0">
+    <div style="padding: 20px 24px 0">
+      <div class="leads-header">
+        <div class="leads-title">
+          Incoming Leads
+          <span class="auto-badge" id="autoRefreshBadge">Auto-refresh: ON</span>
+        </div>
+        <div class="leads-actions">
+          <button class="btn btn-danger" onclick="clearLeads()">Clear All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="leadsTable">
+        <thead>
+          <tr>
+            <th>Name / Email</th>
+            <th>Phone</th>
+            <th>Source</th>
+            <th>Form</th>
+            <th>UTM</th>
+            <th>Received</th>
+            <th>Raw</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="leadsBody">
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <div class="empty-title">No leads yet</div>
+                <div class="empty-sub">Submit a WordPress form or click "Send Test Lead" to see data appear here.</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Raw payload modal -->
+<div class="modal-bg" id="modalBg" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">Close</button>
+    <div class="modal-title">Raw Payload</div>
+    <pre id="modalContent"></pre>
+  </div>
+</div>
+
+<script>
+  const API = '';  // Same origin — server serves this file
+  let knownIds = new Set();
+  let refreshInterval;
+
+  // ── Connection check ──────────────────────────────────────────────────────
+  async function checkHealth() {
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    try {
+      const res = await fetch(API + '/api/health');
+      if (res.ok) {
+        dot.className  = 'status-dot ok';
+        text.className = 'status-text ok';
+        text.textContent = 'Connected';
+      } else {
+        throw new Error();
+      }
+    } catch {
+      dot.className  = 'status-dot error';
+      text.className = 'status-text error';
+      text.textContent = 'Server offline';
+    }
+  }
+
+  // ── Test connection ────────────────────────────────────────────────────────
+  async function testConnection() {
+    const btn    = document.getElementById('testBtn');
+    const result = document.getElementById('testResult');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    result.style.display = 'none';
+
+    try {
+      const res  = await fetch(API + '/api/ingest/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-Key': 'test-api-key-123' },
+        body: JSON.stringify({
+          first_name: 'Test',
+          last_name:  'User',
+          email:      'test@insightfulmindpsych.com',
+          phone:      '555-0100',
+          source:     'dashboard-test',
+          form_id:    'test-connection',
+          notes:      'Sent from InsightLead test dashboard',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        result.className     = 'test-result ok';
+        result.textContent   = `✓ Connection successful! Lead ID: ${data.leadId}`;
+        result.style.display = 'block';
+      } else {
+        throw new Error(data.error || res.statusText);
+      }
+    } catch (err) {
+      result.className     = 'test-result error';
+      result.textContent   = `✗ Failed: ${err.message}`;
+      result.style.display = 'block';
+    }
+
+    btn.disabled    = false;
+    btn.textContent = 'Send Test Lead';
+    loadLeads();
+  }
+
+  // ── Load & render leads ───────────────────────────────────────────────────
+  async function loadLeads() {
+    try {
+      const res  = await fetch(API + '/api/leads');
+      const data = await res.json();
+      renderLeads(data.leads || []);
+      updateStats(data.leads || []);
+    } catch { /* server may be starting */ }
+  }
+
+  function renderLeads(leads) {
+    const tbody = document.getElementById('leadsBody');
+
+    if (leads.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="8">
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div class="empty-title">No leads yet</div>
+            <div class="empty-sub">Submit a WordPress form or click "Send Test Lead" to see data appear here.</div>
+          </div>
+        </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = leads.map(lead => {
+      const isNew = !knownIds.has(lead.id);
+      knownIds.add(lead.id);
+      const name     = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || '—';
+      const utmBits  = [lead.utm_source, lead.utm_medium, lead.utm_campaign].filter(Boolean);
+      const utm      = utmBits.length ? utmBits.join(' / ') : '—';
+      const time     = formatTime(lead.received_at);
+      return `
+        <tr class="${isNew ? 'new-lead' : ''}">
+          <td>
+            <div class="lead-name">${esc(name)}</div>
+            <div class="lead-meta">${esc(lead.email) || '<span style="color:#e2e8f0">no email</span>'}</div>
+          </td>
+          <td>${esc(lead.phone) || '<span style="color:#a0aec0">—</span>'}</td>
+          <td><span class="tag tag-source">${esc(lead.source) || '—'}</span></td>
+          <td>${lead.form_id ? `<span class="tag tag-form">${esc(lead.form_id)}</span>` : '—'}</td>
+          <td><span style="font-size:12px;color:#718096">${esc(utm)}</span></td>
+          <td><span class="time-text">${time}</span></td>
+          <td>
+            <button class="copy-btn" onclick="showRaw('${esc(lead.id)}')">View</button>
+          </td>
+          <td>
+            <button class="delete-btn" onclick="deleteLead('${lead.id}')" title="Delete">✕</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function updateStats(leads) {
+    document.getElementById('statTotal').textContent = leads.length;
+    document.getElementById('statEmail').textContent = leads.filter(l => l.email).length;
+    document.getElementById('statPhone').textContent = leads.filter(l => l.phone).length;
+    if (leads.length > 0) {
+      document.getElementById('statLast').textContent = formatTime(leads[0].received_at);
+    }
+  }
+
+  // ── Delete a lead ─────────────────────────────────────────────────────────
+  async function deleteLead(id) {
+    await fetch(API + '/api/leads/' + id, { method: 'DELETE' });
+    knownIds.delete(id);
+    loadLeads();
+  }
+
+  // ── Clear all leads ───────────────────────────────────────────────────────
+  async function clearLeads() {
+    if (!confirm('Delete all leads? This cannot be undone.')) return;
+    await fetch(API + '/api/leads', { method: 'DELETE' });
+    knownIds.clear();
+    loadLeads();
+  }
+
+  // ── Raw payload modal ─────────────────────────────────────────────────────
+  let leadsCache = [];
+
+  async function showRaw(id) {
+    const res  = await fetch(API + '/api/leads');
+    const data = await res.json();
+    leadsCache = data.leads || [];
+    const lead = leadsCache.find(l => l.id === id);
+    if (!lead) return;
+    document.getElementById('modalContent').textContent = JSON.stringify(lead.raw, null, 2);
+    document.getElementById('modalBg').classList.add('open');
+  }
+
+  function closeModal(e) {
+    if (!e || e.target === document.getElementById('modalBg')) {
+      document.getElementById('modalBg').classList.remove('open');
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 5)   return 'just now';
+    if (diff < 60)  return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function copy(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  checkHealth();
+  loadLeads();
+  setInterval(checkHealth, 10000);     // health check every 10s
+  setInterval(loadLeads,  3000);       // refresh leads every 3s
+</script>
+</body>
+</html>
