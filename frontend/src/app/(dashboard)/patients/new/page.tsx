@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
@@ -18,7 +18,7 @@ const STEPS = [
 
 type FormData = Partial<Patient> & Record<string, string | number | null>;
 
-export default function NewPatientPage() {
+function NewPatientForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const { user }     = useAuth();
@@ -215,5 +215,13 @@ export default function NewPatientPage() {
         }
       </div>
     </div>
+  );
+}
+
+export default function NewPatientPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-slate-500">Loading…</div>}>
+      <NewPatientForm />
+    </Suspense>
   );
 }
