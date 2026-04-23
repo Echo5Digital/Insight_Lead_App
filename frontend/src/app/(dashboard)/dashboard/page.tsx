@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { fmtDate, timeAgo, statusColor, cn } from '@/lib/utils';
 import { AnimatedCounter } from '@/components/ui/AnimatedCounter';
@@ -104,14 +105,14 @@ export default function DashboardPage() {
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {loading ? Array(8).fill(0).map((_,i) => <SkeletonCard key={i} />) : <>
-          <KpiCard icon={UserCheck}    color="blue"   label="Total Patients"       value={stats?.totalPatients ?? 0} />
-          <KpiCard icon={Clock}        color="amber"  label="Active (In Progress)" value={stats?.activePatients ?? 0} />
-          <KpiCard icon={CheckCircle2} color="green"  label="Completed"            value={stats?.completePatients ?? 0} />
-          <KpiCard icon={TrendingUp}   color="purple" label="Avg Intake→Feedback"  value={stats?.avgIntakeToFeedbackDays ?? 0} suffix=" days" />
-          <KpiCard icon={Users}        color="slate"  label="Open Leads"           value={stats?.totalLeads ?? 0} />
-          <KpiCard icon={TrendingUp}   color="cyan"   label="Lead→Patient Rate"    value={stats?.conversionRate ?? 0} suffix="%" />
-          <KpiCard icon={BarChart2}    color="teal"   label="Forms Completion"      value={stats?.formsRate ?? 0} suffix="%" />
-          <KpiCard icon={ClipboardList}color="red"    label="Denied / NMF"          value={stats?.deniedPatients ?? 0} />
+          <KpiCard icon={UserCheck}    color="blue"   label="Total Patients"       value={stats?.totalPatients ?? 0}           href="/patients" />
+          <KpiCard icon={Clock}        color="amber"  label="Active (In Progress)" value={stats?.activePatients ?? 0}          href="/patients?status=In+Progress" />
+          <KpiCard icon={CheckCircle2} color="green"  label="Completed"            value={stats?.completePatients ?? 0}        href="/patients?status=Complete" />
+          <KpiCard icon={TrendingUp}   color="purple" label="Avg Intake→Feedback"  value={stats?.avgIntakeToFeedbackDays ?? 0} href="/process" suffix=" days" />
+          <KpiCard icon={Users}        color="slate"  label="Open Leads"           value={stats?.totalLeads ?? 0}              href="/leads" />
+          <KpiCard icon={TrendingUp}   color="cyan"   label="Lead→Patient Rate"    value={stats?.conversionRate ?? 0}          href="/referrals" suffix="%" />
+          <KpiCard icon={BarChart2}    color="teal"   label="Forms Completion"     value={stats?.formsRate ?? 0}               href="/patients" suffix="%" />
+          <KpiCard icon={ClipboardList}color="red"    label="Denied / NMF"         value={stats?.deniedPatients ?? 0}          href="/patients?status=Denied" />
         </>}
       </div>
 
@@ -239,7 +240,9 @@ export default function DashboardPage() {
           {(stats?.recentActivity || []).length === 0
             ? <p className="px-5 py-8 text-sm text-slate-400 text-center">No activity yet</p>
             : (stats?.recentActivity || []).map(log => (
-                <div key={log._id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div key={log._id}
+                  onClick={() => log.entityId && (window.location.href = `/${log.entityType}s/${log.entityId}`)}
+                  className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-3">
                     <div className="w-7 h-7 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold flex-shrink-0">
                       {(log.userName || '?')[0].toUpperCase()}
@@ -247,7 +250,7 @@ export default function DashboardPage() {
                     <div>
                       <span className="text-sm font-medium text-slate-700">{log.userName}</span>
                       <span className="text-sm text-slate-500"> {log.action} a </span>
-                      <span className="text-sm font-medium text-slate-700">{log.entityType}</span>
+                      <span className="text-sm font-medium text-brand">{log.entityType}</span>
                     </div>
                   </div>
                   <span className="text-xs text-slate-400 whitespace-nowrap ml-4">{timeAgo(log.timestamp)}</span>
@@ -268,9 +271,13 @@ const KPI_COLORS: Record<string,string> = {
   teal:   'bg-teal-50 text-teal-600',   red:    'bg-red-50 text-red-600',
 };
 
-function KpiCard({ icon: Icon, color, label, value, suffix = '' }: { icon: React.ElementType; color: string; label: string; value: number; suffix?: string }) {
+function KpiCard({ icon: Icon, color, label, value, suffix = '', href }: { icon: React.ElementType; color: string; label: string; value: number; suffix?: string; href?: string }) {
+  const router = useRouter();
   return (
-    <div className="stat-card flex items-center gap-4">
+    <div
+      onClick={() => href && router.push(href)}
+      className={cn('stat-card flex items-center gap-4 transition-all duration-150', href ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : '')}
+    >
       <div className={cn('p-3 rounded-xl flex-shrink-0', KPI_COLORS[color] || 'bg-slate-100 text-slate-600')}>
         <Icon size={20} strokeWidth={2} />
       </div>
@@ -293,14 +300,21 @@ function ApptPanel({ title, days, patients, dateField, lookback }: { title: stri
       </div>
       {patients.length === 0
         ? <p className="text-xs text-slate-400 text-center py-4">None</p>
-        : <ul className="space-y-2">
+        : <ul className="space-y-1">
             {patients.slice(0,8).map(p => (
-              <li key={p._id} className="flex items-center justify-between">
-                <span className="text-sm text-slate-700 truncate mr-2">{p.name}</span>
+              <li key={p._id}
+                onClick={() => window.location.href = `/patients/${p._id}`}
+                className="flex items-center justify-between px-1 py-1 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group">
+                <span className="text-sm text-slate-700 truncate mr-2 group-hover:text-brand">{p.name}</span>
                 <span className="text-xs text-slate-400 whitespace-nowrap">{fmtDate(p[dateField] as string)}</span>
               </li>
             ))}
-            {patients.length > 8 && <li className="text-xs text-brand">+{patients.length - 8} more</li>}
+            {patients.length > 8 && (
+              <li onClick={() => window.location.href = '/appointments'}
+                className="text-xs text-brand cursor-pointer hover:underline pt-1">
+                +{patients.length - 8} more — view all
+              </li>
+            )}
           </ul>
       }
     </div>
