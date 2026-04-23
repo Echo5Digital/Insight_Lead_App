@@ -21,7 +21,7 @@ interface Stats {
   totalLeads: number; totalPatients: number; activePatients: number;
   completePatients: number; deniedPatients: number; conversionRate: number;
   formsRate: number; avgIntakeToFeedbackDays: number | null;
-  recentActivity: { _id: string; userName: string; action: string; entityType: string; timestamp: string }[];
+  recentActivity: { _id: string; userName: string; action: string; entityType: string; entityId?: string; timestamp: string }[];
 }
 interface Appts { intake: P[]; test: P[]; feedback: P[]; gfe: P[]; config: Record<string,number> }
 interface P { _id: string; name: string; phone?: string; intakeAppt?: string; testAppt?: string; feedbackAppt?: string; gfeSent?: string }
