@@ -52,7 +52,7 @@ export default function ReferralsPage() {
 
   // Available years derived from data, sorted asc
   const availableYears = useMemo(() =>
-    [...new Set(cleanRows.map(r => r._id.year))].sort(),
+    Array.from(new Set(cleanRows.map(r => r._id.year))).sort(),
   [cleanRows]);
 
   // Max year+month in data (for Last 90d reference)

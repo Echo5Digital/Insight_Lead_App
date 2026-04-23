@@ -27,7 +27,8 @@ function NewPatientForm() {
   const rawCategory = searchParams.get('category') || 'Standard';
 
   const [step,     setStep]     = useState(0);
-  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: rawCategory as Patient['category'] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: rawCategory } as any);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving,   setSaving]   = useState(false);
 
