@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { fmtDate, fmtDateShort, cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -26,13 +27,11 @@ function rowBg(status?: string) {
   return STATUS_COLORS[(status || '').toLowerCase()] || '';
 }
 
-export default function PatientsPage() {
-  const { user }   = useAuth();
-  const isAdmin    = user?.role === 'admin';
-  const canWrite   = user?.role === 'admin' || user?.role === 'staff';
-
-  // Read initial filters from URL query params (e.g. from referrals page click)
-  const getParam = (key: string) => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(key) || '' : '';
+function PatientsInner() {
+  const { user }     = useAuth();
+  const isAdmin      = user?.role === 'admin';
+  const canWrite     = user?.role === 'admin' || user?.role === 'staff';
+  const searchParams = useSearchParams();
 
   const [patients,  setPatients]  = useState<Patient[]>([]);
   const [total,     setTotal]     = useState(0);
@@ -46,14 +45,14 @@ export default function PatientsPage() {
   const [sortBy,    setSortBy]    = useState('createdAt');
   const [sortDir,   setSortDir]   = useState<'asc'|'desc'>('desc');
 
-  // Filters — pre-filled from URL query params when navigating from referrals/dashboard
-  const [search,    setSearch]    = useState(() => getParam('search'));
-  const [status,    setStatus]    = useState(() => getParam('status'));
-  const [insurance, setInsurance] = useState(() => getParam('insurance'));
-  const [category,  setCategory]  = useState(() => getParam('category'));
-  const [source,    setSource]    = useState(() => getParam('referralSource'));
-  const [dateFrom,  setDateFrom]  = useState(() => getParam('dateFrom'));
-  const [dateTo,    setDateTo]    = useState(() => getParam('dateTo'));
+  // Filters — pre-filled from URL query params when navigating from dashboard/referrals
+  const [search,    setSearch]    = useState(() => searchParams.get('search')         || '');
+  const [status,    setStatus]    = useState(() => searchParams.get('status')         || '');
+  const [insurance, setInsurance] = useState(() => searchParams.get('insurance')      || '');
+  const [category,  setCategory]  = useState(() => searchParams.get('category')       || '');
+  const [source,    setSource]    = useState(() => searchParams.get('referralSource') || '');
+  const [dateFrom,  setDateFrom]  = useState(() => searchParams.get('dateFrom')       || '');
+  const [dateTo,    setDateTo]    = useState(() => searchParams.get('dateTo')         || '');
   const [needsName, setNeedsName] = useState(false);
 
   const loadPatients = useCallback(async () => {
@@ -260,5 +259,13 @@ export default function PatientsPage() {
         title="Bulk Delete Patients" message={`Permanently delete ${selected.size} patients? This cannot be undone.`}
         confirmLabel={`Delete ${selected.size} Patients`} loading={saving} />
     </div>
+  );
+}
+
+export default function PatientsPage() {
+  return (
+    <Suspense fallback={<div className="p-6"><PageSpinner /></div>}>
+      <PatientsInner />
+    </Suspense>
   );
 }
