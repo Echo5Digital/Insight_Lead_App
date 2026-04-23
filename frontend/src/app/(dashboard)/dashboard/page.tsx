@@ -241,7 +241,13 @@ export default function DashboardPage() {
             ? <p className="px-5 py-8 text-sm text-slate-400 text-center">No activity yet</p>
             : (stats?.recentActivity || []).map(log => (
                 <div key={log._id}
-                  onClick={() => log.entityId && (window.location.href = `/${log.entityType}s/${log.entityId}`)}
+                  onClick={() => {
+                    if (!log.entityId) return;
+                    // leads have no detail page — go to leads list; patients go to detail
+                    window.location.href = log.entityType === 'patient'
+                      ? `/patients/${log.entityId}`
+                      : `/leads`;
+                  }}
                   className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-3">
                     <div className="w-7 h-7 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -305,8 +311,13 @@ function ApptPanel({ title, days, patients, dateField, lookback }: { title: stri
               <li key={p._id}
                 onClick={() => window.location.href = `/patients/${p._id}`}
                 className="flex items-center justify-between px-1 py-1 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group">
-                <span className="text-sm text-slate-700 truncate mr-2 group-hover:text-brand">{p.name}</span>
-                <span className="text-xs text-slate-400 whitespace-nowrap">{fmtDate(p[dateField] as string)}</span>
+                <div className="min-w-0 flex-1 mr-2">
+                  {p.name
+                    ? <span className="text-sm text-slate-700 truncate group-hover:text-brand">{p.name}</span>
+                    : <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">⚠ Add name</span>
+                  }
+                </div>
+                <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">{fmtDate(p[dateField] as string)}</span>
               </li>
             ))}
             {patients.length > 8 && (

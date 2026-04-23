@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { fmtDate } from '@/lib/utils';
+import { fmtDate, fmtDateShort } from '@/lib/utils';
 import { PageSpinner } from '@/components/ui/Spinner';
 import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
@@ -63,11 +63,16 @@ function ApptPanel({ title, days, patients, field, lookback }: {
           : patients.map(p => (
               <Link key={p._id} href={`/patients/${p._id}`}
                 className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors group">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 group-hover:text-brand transition-colors">{p.name}</p>
-                  <p className="text-xs text-slate-400">{p.phone || ''}</p>
+                <div className="min-w-0 flex-1 mr-2">
+                  {p.name
+                    ? <p className="text-sm font-medium text-slate-700 group-hover:text-brand truncate">{p.name}</p>
+                    : <p className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full inline-block">⚠ Add name</p>
+                  }
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {p.insurance || ''}{p.dob ? ` · DOB ${fmtDateShort(p.dob)}` : ''}
+                  </p>
                 </div>
-                <span className="text-xs text-slate-500 font-medium whitespace-nowrap ml-2">
+                <span className="text-xs text-slate-500 font-medium whitespace-nowrap flex-shrink-0">
                   {fmtDate(p[field] as string)}
                 </span>
               </Link>

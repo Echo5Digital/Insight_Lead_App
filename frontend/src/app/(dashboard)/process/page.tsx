@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { PageSpinner } from '@/components/ui/Spinner';
@@ -9,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 interface ProcessData {
   last30: Metrics; last60: Metrics; ytd: Metrics;
+  refDate?: string;
   monthly: { _id: { year: number; month: number }; avgI2T: number; avgT2F: number; avgI2F: number; count: number }[];
 }
 interface Metrics { avgIntakeToTest: number|null; avgTestToFeedback: number|null; avgIntakeToFeedback: number|null; formsCompletionPct: number }
@@ -24,6 +26,19 @@ export default function ProcessPage() {
       .then(setData).catch(() => toast.error('Failed to load process data'))
       .finally(() => setLoading(false));
   }, []);
+
+  const router = useRouter();
+
+  // Click a metric cell → view patients in that period
+  const handleMetricClick = (period: string) => {
+    const now = data?.refDate ? new Date(data.refDate) : new Date();
+    const ref = new Date(now);
+    let from: Date;
+    if (period === 'last30') { from = new Date(ref); from.setDate(from.getDate() - 30); }
+    else if (period === 'last60') { from = new Date(ref); from.setDate(from.getDate() - 60); }
+    else { from = new Date(ref.getFullYear(), 0, 1); }
+    router.push(`/patients?dateFrom=${from.toISOString().slice(0,10)}&dateTo=${ref.toISOString().slice(0,10)}`);
+  };
 
   if (loading) return <div className="p-6"><PageSpinner /></div>;
 
@@ -60,7 +75,9 @@ export default function ProcessPage() {
           <div key={key} className="grid grid-cols-4 border-b border-slate-50 hover:bg-slate-50 transition-colors">
             <div className="px-5 py-3.5 text-sm font-medium text-slate-700">{label}</div>
             {(['last30','last60','ytd'] as const).map(period => (
-              <div key={period} className={cn('px-5 py-3.5 text-center text-lg font-bold border-l border-slate-100', color)}>
+              <div key={period}
+                onClick={() => handleMetricClick(period)}
+                className={cn('px-5 py-3.5 text-center text-lg font-bold border-l border-slate-100 cursor-pointer hover:opacity-70 transition-opacity', color)}>
                 {fmt(data?.[period]?.[key as keyof Metrics] as number | null, unit)}
               </div>
             ))}
