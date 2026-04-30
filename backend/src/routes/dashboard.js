@@ -275,4 +275,116 @@ async function getTasks(req, res) {
   }
 }
 
-module.exports = { getStats, getReferrals, getProcess, getAppointments, getTasks, requireAuth };
+// GET /api/dashboard/new-patients?dateFrom=&dateTo=
+async function getNewPatients(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo } = req.query;
+
+    const match = { tenantId };
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) match.createdAt.$gte = new Date(dateFrom);
+      if (dateTo)   match.createdAt.$lte = new Date(new Date(dateTo).setHours(23,59,59,999));
+    }
+
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            year:  { $year:  '$createdAt' },
+            month: { $month: '$createdAt' },
+            day:   { $dayOfMonth: '$createdAt' },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
+    ];
+
+    const data = await db.collection('patients').aggregate(pipeline).toArray();
+    res.json({ data });
+  } catch (err) {
+    console.error('[new-patients]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// GET /api/dashboard/forms-stats?dateFrom=&dateTo=
+async function getFormsStats(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo } = req.query;
+
+    const match = { tenantId };
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) match.createdAt.$gte = new Date(dateFrom);
+      if (dateTo)   match.createdAt.$lte = new Date(new Date(dateTo).setHours(23,59,59,999));
+    }
+
+    const [total, formsSentCount, formsRecCount, apptSetCount] = await Promise.all([
+      db.collection('patients').countDocuments(match),
+      db.collection('patients').countDocuments({ ...match, formsSent: { $exists: true, $ne: null } }),
+      db.collection('patients').countDocuments({ ...match, formsRec:  { $exists: true, $ne: null } }),
+      db.collection('patients').countDocuments({ ...match, $or: [
+        { intakeAppt:    { $exists: true, $ne: null } },
+        { testAppt:      { $exists: true, $ne: null } },
+        { feedbackAppt:  { $exists: true, $ne: null } },
+      ]}),
+    ]);
+
+    const pct = (n) => total > 0 ? Math.round((n / total) * 100) : 0;
+
+    res.json({
+      total,
+      formsSentPct:  pct(formsSentCount),
+      formsRecPct:   pct(formsRecCount),
+      apptSetPct:    pct(apptSetCount),
+      formsSentCount,
+      formsRecCount,
+      apptSetCount,
+    });
+  } catch (err) {
+    console.error('[forms-stats]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// GET /api/dashboard/status-breakdown?dateFrom=&dateTo=
+async function getStatusBreakdown(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo } = req.query;
+
+    const match = { tenantId };
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) match.createdAt.$gte = new Date(dateFrom);
+      if (dateTo)   match.createdAt.$lte = new Date(new Date(dateTo).setHours(23,59,59,999));
+    }
+
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id:   '$status',
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ];
+
+    const data = await db.collection('patients').aggregate(pipeline).toArray();
+    res.json({ data });
+  } catch (err) {
+    console.error('[status-breakdown]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+module.exports = { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown };

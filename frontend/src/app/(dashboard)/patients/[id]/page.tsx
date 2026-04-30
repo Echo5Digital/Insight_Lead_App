@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { fmtDate, toInputDate, fmtCurrency, timeAgo, cn } from '@/lib/utils';
@@ -36,14 +36,18 @@ export default function PatientDetailPage() {
   const isAdmin   = user?.role === 'admin';
   const canWrite  = user?.role === 'admin' || user?.role === 'staff';
 
-  const [patient,    setPatient]    = useState<Patient | null>(null);
-  const [auditLog,   setAuditLog]   = useState<AuditLog[]>([]);
-  const [settings,   setSettings]   = useState<Settings | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [editing,    setEditing]    = useState(false);
-  const [form,       setForm]       = useState<Partial<Patient>>({});
-  const [saving,     setSaving]     = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [patient,        setPatient]        = useState<Patient | null>(null);
+  const [auditLog,       setAuditLog]       = useState<AuditLog[]>([]);
+  const [settings,       setSettings]       = useState<Settings | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [editing,        setEditing]        = useState(false);
+  const [form,           setForm]           = useState<Partial<Patient>>({});
+  const [saving,         setSaving]         = useState(false);
+  const [deleteOpen,     setDeleteOpen]     = useState(false);
+  const [milestoneForm,  setMilestoneForm]  = useState<Partial<Patient>>({});
+  const [milestoneDirty, setMilestoneDirty] = useState(false);
+  const [milestoneSaving,setMilestoneSaving]= useState(false);
+  const milestoneDirtyRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +57,9 @@ export default function PatientDetailPage() {
         api.get<Settings>('/settings'),
       ]);
       setPatient(p); setAuditLog(al); setSettings(s);
+      setMilestoneForm(p);
+      setMilestoneDirty(false);
+      milestoneDirtyRef.current = false;
     } catch { toast.error('Failed to load patient'); }
     finally { setLoading(false); }
   }, [id]);
@@ -61,6 +68,36 @@ export default function PatientDetailPage() {
 
   const startEdit = () => { setForm({ ...patient }); setEditing(true); };
   const cancelEdit = () => { setEditing(false); setForm({}); };
+
+  // Warn on navigate away if milestone dates have unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (milestoneDirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  const handleMilestoneSave = async () => {
+    setMilestoneSaving(true);
+    try {
+      await api.put(`/patients/${id}`, milestoneForm);
+      toast.success('Dates saved');
+      setMilestoneDirty(false);
+      milestoneDirtyRef.current = false;
+      load();
+    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Error'); }
+    finally { setMilestoneSaving(false); }
+  };
+
+  const handleMilestoneDiscard = () => {
+    setMilestoneForm({ ...patient });
+    setMilestoneDirty(false);
+    milestoneDirtyRef.current = false;
+  };
 
   const f = (key: keyof Patient) => editing
     ? <input className="input-base py-1.5 text-sm" value={form[key] as string ?? ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
@@ -247,11 +284,25 @@ export default function PatientDetailPage() {
 
         {/* Right: Milestone dates + Audit */}
         <div className="xl:col-span-2 space-y-5">
-          {/* All 11 dates */}
+          {/* All 11 dates — always inline editable */}
           <Section title="Milestone Dates">
             <div className="grid grid-cols-2 gap-x-8 gap-y-3">
               {MILESTONES.map(m => (
-                <Row key={m.key} label={m.label}>{dateF(m.key)}</Row>
+                <Row key={m.key} label={m.label}>
+                  {canWrite
+                    ? <input
+                        type="date"
+                        className="input-base py-1.5 text-sm"
+                        value={toInputDate(milestoneForm[m.key as keyof Patient] as string)}
+                        onChange={e => {
+                          setMilestoneForm(prev => ({ ...prev, [m.key]: e.target.value || null }));
+                          setMilestoneDirty(true);
+                          milestoneDirtyRef.current = true;
+                        }}
+                      />
+                    : <span className="text-sm text-slate-700">{fmtDate(patient?.[m.key as keyof Patient] as string)}</span>
+                  }
+                </Row>
               ))}
             </div>
           </Section>
@@ -287,6 +338,19 @@ export default function PatientDetailPage() {
 
       <ConfirmModal open={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={handleDelete}
         title="Delete Patient" message={`Permanently delete ${patient.name}? This cannot be undone.`} loading={saving} />
+
+      {/* Unsaved milestone dates banner */}
+      {milestoneDirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-4 bg-amber-50 border-t-2 border-amber-300 px-6 py-3 shadow-lg">
+          <span className="text-sm font-medium text-amber-800">You have unsaved changes to milestone dates.</span>
+          <div className="flex gap-2">
+            <button onClick={handleMilestoneDiscard} className="btn-secondary text-sm">Discard</button>
+            <button onClick={handleMilestoneSave} disabled={milestoneSaving} className="btn-primary text-sm">
+              {milestoneSaving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

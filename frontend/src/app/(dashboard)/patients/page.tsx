@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { fmtDate, fmtDateShort, cn } from '@/lib/utils';
+import { fmtDate, fmtDateShort, toInputDate, cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { ConfirmModal } from '@/components/ui/Modal';
@@ -120,6 +120,19 @@ function PatientsInner() {
     } catch { toast.error('Update failed'); }
   };
 
+  const handleInlineDate = async (p: Patient, field: 'intakeAppt' | 'testAppt' | 'feedbackAppt', value: string) => {
+    const newVal = value || null;
+    setPatients(prev => prev.map(x => x._id === p._id ? { ...x, [field]: newVal } : x));
+    try {
+      await api.put(`/patients/${p._id}`, { [field]: newVal });
+      toast.success('Date updated');
+    } catch {
+      toast.error('Update failed');
+      // revert on error
+      setPatients(prev => prev.map(x => x._id === p._id ? { ...x, [field]: p[field] } : x));
+    }
+  };
+
   const Th = ({ field, label }: { field: string; label: string }) => (
     <th className={cn('table-th cursor-pointer select-none hover:bg-slate-100 transition-colors', sortBy === field ? 'text-brand' : '')}
       onClick={() => toggleSort(field)}>
@@ -184,14 +197,16 @@ function PatientsInner() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? <PageSpinner /> : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div>
+            <table className="min-w-[1100px] w-full">
               <thead>
                 <tr>
-                  {isAdmin && <th className="table-th w-8"><input type="checkbox" checked={selected.size === patients.length && patients.length > 0} onChange={toggleAll} className="rounded" /></th>}
-                  <Th field="name"       label="Name" />
+                  {isAdmin && <th className="table-th w-8 sticky left-0 z-20 bg-white"><input type="checkbox" checked={selected.size === patients.length && patients.length > 0} onChange={toggleAll} className="rounded" /></th>}
+                  <th className={cn('table-th cursor-pointer select-none hover:bg-slate-100 transition-colors sticky z-20 bg-white', isAdmin ? 'left-8' : 'left-0', sortBy === 'name' ? 'text-brand' : '')} onClick={() => toggleSort('name')}>
+                    Name{sortBy === 'name' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                  </th>
                   <th className="table-th">Insurance</th>
                   <th className="table-th">Source</th>
                   <Th field="status"     label="Status" />
@@ -216,7 +231,7 @@ function PatientsInner() {
                         <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggleSelect(p._id)} className="rounded" />
                       </td>
                     )}
-                    <td className="table-td" onClick={() => window.location.href = `/patients/${p._id}`}>
+                    <td className={cn('table-td sticky z-10', isAdmin ? 'left-8' : 'left-0', rowBg(p.status) || 'bg-white')} onClick={() => window.location.href = `/patients/${p._id}`}>
                       <div className="flex items-center gap-2">
                         {p.needsName
                           ? <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-full font-semibold whitespace-nowrap cursor-pointer">
@@ -241,9 +256,27 @@ function PatientsInner() {
                     <td className="table-td"><div className="flex gap-1"><Check val={p.formsSent} /><Check val={p.formsRec} /></div></td>
                     <td className="table-td"><div className="flex gap-1"><Check val={p.preAuthSent} /><Check val={p.preAuthRec} /></div></td>
                     <td className="table-td"><div className="flex gap-1"><Check val={p.gfeSent} /><Check val={p.gfeRec} /></div></td>
-                    <td className="table-td text-xs text-slate-600">{fmtDateShort(p.intakeAppt)}</td>
-                    <td className="table-td text-xs text-slate-600">{fmtDateShort(p.testAppt)}</td>
-                    <td className="table-td text-xs text-slate-600">{fmtDateShort(p.feedbackAppt)}</td>
+                    <td className="table-td" onClick={e => e.stopPropagation()}>
+                      {canWrite
+                        ? <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-brand bg-transparent w-32"
+                            value={toInputDate(p.intakeAppt)} onChange={e => handleInlineDate(p, 'intakeAppt', e.target.value)} />
+                        : <span className="text-xs text-slate-600">{fmtDateShort(p.intakeAppt)}</span>
+                      }
+                    </td>
+                    <td className="table-td" onClick={e => e.stopPropagation()}>
+                      {canWrite
+                        ? <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-brand bg-transparent w-32"
+                            value={toInputDate(p.testAppt)} onChange={e => handleInlineDate(p, 'testAppt', e.target.value)} />
+                        : <span className="text-xs text-slate-600">{fmtDateShort(p.testAppt)}</span>
+                      }
+                    </td>
+                    <td className="table-td" onClick={e => e.stopPropagation()}>
+                      {canWrite
+                        ? <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-brand bg-transparent w-32"
+                            value={toInputDate(p.feedbackAppt)} onChange={e => handleInlineDate(p, 'feedbackAppt', e.target.value)} />
+                        : <span className="text-xs text-slate-600">{fmtDateShort(p.feedbackAppt)}</span>
+                      }
+                    </td>
                     <td className="table-td text-xs text-slate-700">{p.balance != null ? `$${p.balance}` : '—'}</td>
                     <td className="table-td text-xs text-slate-500 max-w-[140px] truncate">{p.notes || ''}</td>
                   </tr>

@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import {
   Users, UserCheck, Clock, CheckCircle2, TrendingUp,
-  BarChart2, ClipboardList, CalendarClock,
+  BarChart2, ClipboardList, CalendarClock, Calendar,
 } from 'lucide-react';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -31,17 +31,47 @@ interface ProcessData {
 }
 interface Metrics { avgIntakeToTest: number|null; avgTestToFeedback: number|null; avgIntakeToFeedback: number|null; formsCompletionPct: number }
 interface ReferralData { patients: { _id: { source: string; year: number; month: number }; count: number }[] }
+interface NewPatientEntry { _id: { year: number; month: number; day: number }; count: number }
+interface FormsStats { total: number; formsSentPct: number; formsRecPct: number; apptSetPct: number; formsSentCount: number; formsRecCount: number; apptSetCount: number }
+interface StatusEntry { _id: string; count: number }
+
+type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function getPresetDates(preset: DatePreset): { dateFrom: string; dateTo: string } {
+  const now   = new Date();
+  const pad   = (n: number) => String(n).padStart(2, '0');
+  const fmt   = (d: Date)   => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const today = fmt(now);
+  if (preset === 'today') return { dateFrom: today, dateTo: today };
+  if (preset === 'week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    return { dateFrom: fmt(start), dateTo: today };
+  }
+  if (preset === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { dateFrom: fmt(start), dateTo: today };
+  }
+  return { dateFrom: '', dateTo: '' };
+}
 const PIE_COLORS = { 'In Progress': '#3B82F6', 'Complete': '#10B981', 'Denied': '#EF4444', 'On Hold': '#F59E0B', 'Not Moving Forward': '#94A3B8', 'No Response': '#F97316' };
 
 /* ── Component ─────────────────────────────────────────────────────────────── */
 export default function DashboardPage() {
-  const [stats,    setStats]    = useState<Stats|null>(null);
-  const [appts,    setAppts]    = useState<Appts|null>(null);
-  const [process,  setProcess]  = useState<ProcessData|null>(null);
-  const [referral, setReferral] = useState<ReferralData|null>(null);
-  const [loading,  setLoading]  = useState(true);
+  const [stats,           setStats]           = useState<Stats|null>(null);
+  const [appts,           setAppts]           = useState<Appts|null>(null);
+  const [process,         setProcess]         = useState<ProcessData|null>(null);
+  const [referral,        setReferral]        = useState<ReferralData|null>(null);
+  const [loading,         setLoading]         = useState(true);
+  const [newPatients,     setNewPatients]     = useState<NewPatientEntry[]>([]);
+  const [formsStats,      setFormsStats]      = useState<FormsStats|null>(null);
+  const [statusBreakdown, setStatusBreakdown] = useState<StatusEntry[]>([]);
+  const [datePreset,      setDatePreset]      = useState<DatePreset>('month');
+  const [customFrom,      setCustomFrom]      = useState('');
+  const [customTo,        setCustomTo]        = useState('');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,7 +88,29 @@ export default function DashboardPage() {
     setLoading(false);
   }, []);
 
+  const loadAnalytics = useCallback(async (preset: DatePreset, from: string, to: string) => {
+    const { dateFrom, dateTo } = preset === 'custom'
+      ? { dateFrom: from, dateTo: to }
+      : getPresetDates(preset);
+    if (preset === 'custom' && (!from || !to)) return;
+    setAnalyticsLoading(true);
+    const params = new URLSearchParams();
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo)   params.set('dateTo',   dateTo);
+    const qs = params.toString() ? `?${params}` : '';
+    const [np, fs, sb] = await Promise.allSettled([
+      api.get<{ data: NewPatientEntry[] }>(`/dashboard/new-patients${qs}`),
+      api.get<FormsStats>(`/dashboard/forms-stats${qs}`),
+      api.get<{ data: StatusEntry[] }>(`/dashboard/status-breakdown${qs}`),
+    ]);
+    if (np.status === 'fulfilled') setNewPatients(np.value.data);
+    if (fs.status === 'fulfilled') setFormsStats(fs.value);
+    if (sb.status === 'fulfilled') setStatusBreakdown(sb.value.data);
+    setAnalyticsLoading(false);
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadAnalytics(datePreset, customFrom, customTo); }, [loadAnalytics, datePreset, customFrom, customTo]);
 
   /* ── Referral chart data ─────────────────────────────────────────────────── */
   const referralChartData = (() => {
@@ -98,6 +150,18 @@ export default function DashboardPage() {
   /* ── Outstanding tasks count ─────────────────────────────────────────────── */
   const tasksCount = (appts as unknown as { missingIntake?: unknown[]; missingTest?: unknown[]; missingFeedback?: unknown[] } | null);
 
+  /* ── New patients chart data ────────────────────────────────────────────── */
+  const newPatientsChartData = newPatients.map(e => ({
+    date: `${e._id.month}/${e._id.day}`,
+    'New Patients': e.count,
+  }));
+
+  /* ── Status breakdown chart data ─────────────────────────────────────────── */
+  const STATUS_BAR_COLORS: Record<string,string> = {
+    'In Progress': '#3B82F6', 'Complete': '#10B981', 'Denied': '#EF4444',
+    'On Hold': '#F59E0B', 'Not Moving Forward': '#94A3B8', 'No Response': '#F97316',
+  };
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="page-title">Dashboard</h1>
@@ -114,6 +178,115 @@ export default function DashboardPage() {
           <KpiCard icon={BarChart2}    color="teal"   label="Forms Completion"     value={stats?.formsRate ?? 0}               href="/patients" suffix="%" />
           <KpiCard icon={ClipboardList}color="red"    label="Denied / NMF"         value={stats?.deniedPatients ?? 0}          href="/patients?status=Denied" />
         </>}
+      </div>
+
+      {/* ── Date Range Filter Bar ────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Calendar size={16} className="text-slate-400 flex-shrink-0" />
+          <span className="text-sm font-medium text-slate-600 mr-1">View by:</span>
+          {(['today','week','month'] as DatePreset[]).map(p => (
+            <button key={p} onClick={() => setDatePreset(p)}
+              className={cn('text-sm px-4 py-1.5 rounded-lg font-medium transition-colors border',
+                datePreset === p
+                  ? 'bg-brand text-white border-brand'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand')}>
+              {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
+            </button>
+          ))}
+          <button onClick={() => setDatePreset('custom')}
+            className={cn('text-sm px-4 py-1.5 rounded-lg font-medium transition-colors border',
+              datePreset === 'custom'
+                ? 'bg-brand text-white border-brand'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand')}>
+            Custom
+          </button>
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2 ml-2">
+              <input type="date" className="input-base text-sm py-1.5" value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)} />
+              <span className="text-slate-400 text-sm">to</span>
+              <input type="date" className="input-base text-sm py-1.5" value={customTo}
+                onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Analytics Sections (date-filtered) ───────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* New Patients Chart */}
+        <div className="xl:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <h3 className="section-title mb-4">New Patients Added</h3>
+          {analyticsLoading
+            ? <div className="flex items-center justify-center h-[180px] text-sm text-slate-400">Loading…</div>
+            : newPatientsChartData.length === 0
+              ? <Empty text="No new patients in this period" />
+              : <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={newPatientsChartData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                    <Bar dataKey="New Patients" fill="#3B82F6" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+          }
+        </div>
+
+        {/* Form Completion % Tiles */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <h3 className="section-title mb-4">Process Completion</h3>
+          {analyticsLoading
+            ? <div className="space-y-4">{Array(3).fill(0).map((_,i) => <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+            : formsStats
+              ? <div className="space-y-4">
+                  {[
+                    { label: 'Forms Sent',      pct: formsStats.formsSentPct,  count: formsStats.formsSentCount,  color: 'bg-blue-500' },
+                    { label: 'Forms Received',  pct: formsStats.formsRecPct,   count: formsStats.formsRecCount,   color: 'bg-emerald-500' },
+                    { label: 'Appt Set',        pct: formsStats.apptSetPct,    count: formsStats.apptSetCount,    color: 'bg-purple-500' },
+                  ].map(({ label, pct, count, color }) => (
+                    <div key={label}>
+                      <div className="flex justify-between text-xs text-slate-600 mb-1.5">
+                        <span className="font-medium">{label}</span>
+                        <span className="font-semibold">{pct}% <span className="text-slate-400 font-normal">({count}/{formsStats.total})</span></span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-slate-400 pt-1">{formsStats.total} patients in period</p>
+                </div>
+              : <Empty text="No data" />
+          }
+        </div>
+      </div>
+
+      {/* Status Breakdown */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <h3 className="section-title mb-4">Status Breakdown</h3>
+        {analyticsLoading
+          ? <div className="flex items-center justify-center h-[160px] text-sm text-slate-400">Loading…</div>
+          : statusBreakdown.length === 0
+            ? <Empty text="No patient data in this period" />
+            : <div className="space-y-3">
+                {statusBreakdown.map(s => {
+                  const total = statusBreakdown.reduce((acc, x) => acc + x.count, 0);
+                  const pct   = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                  const color = STATUS_BAR_COLORS[s._id] || '#94A3B8';
+                  return (
+                    <div key={s._id} className="flex items-center gap-3">
+                      <span className="text-sm text-slate-600 w-40 flex-shrink-0">{s._id || 'Unknown'}</span>
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700 w-16 text-right">{s.count} <span className="text-slate-400 font-normal text-xs">({pct}%)</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+        }
       </div>
 
       {/* ── Charts row 1 ──────────────────────────────────────────────────── */}

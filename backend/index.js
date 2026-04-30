@@ -10,7 +10,7 @@ const webhookLeads  = require('./src/routes/webhook');
 const { login, logout, getMe }                          = require('./src/routes/auth');
 const { getLeads, getLead, createLead, updateLead, convertLead, deleteLead } = require('./src/routes/leads');
 const { getPatients, getPatient, createPatient, updatePatient, deletePatient, bulkDeletePatients, exportCsv } = require('./src/routes/patients');
-const { getStats, getReferrals, getProcess, getAppointments, getTasks } = require('./src/routes/dashboard');
+const { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown } = require('./src/routes/dashboard');
 const { fetchSettings, saveSettings }   = require('./src/routes/settings');
 const { getUsers, createUser, updateUser } = require('./src/routes/users');
 const setup                             = require('./src/routes/setup');
@@ -70,11 +70,14 @@ app.put('/api/patients/:id',         requireAuth, requireRole(['admin','staff'])
 app.delete('/api/patients/:id',      requireAuth, requireRole('admin'),             deletePatient);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-app.get('/api/dashboard/stats',        requireAuth, getStats);
-app.get('/api/dashboard/referrals',    requireAuth, getReferrals);
-app.get('/api/dashboard/process',      requireAuth, getProcess);
-app.get('/api/dashboard/appointments', requireAuth, getAppointments);
-app.get('/api/dashboard/tasks',        requireAuth, getTasks);
+app.get('/api/dashboard/stats',            requireAuth, getStats);
+app.get('/api/dashboard/referrals',        requireAuth, getReferrals);
+app.get('/api/dashboard/process',          requireAuth, getProcess);
+app.get('/api/dashboard/appointments',     requireAuth, getAppointments);
+app.get('/api/dashboard/tasks',            requireAuth, getTasks);
+app.get('/api/dashboard/new-patients',     requireAuth, getNewPatients);
+app.get('/api/dashboard/forms-stats',      requireAuth, getFormsStats);
+app.get('/api/dashboard/status-breakdown', requireAuth, getStatusBreakdown);
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 app.get('/api/settings', requireAuth,                       fetchSettings);
