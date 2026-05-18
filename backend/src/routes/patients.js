@@ -171,6 +171,16 @@ async function getPatient(req, res) {
     const patient = await db.collection('patients').findOne({ _id: new ObjectId(req.params.id), tenantId: req.user.tenantId });
     if (!patient) return res.status(404).json({ error: 'Not found' });
 
+    // HIPAA: log every PHI access (read)
+    await writeAudit({
+      tenantId:  req.user.tenantId,
+      userId:    req.user.userId,
+      userName:  req.user.name || req.user.email,
+      entityType: 'patient',
+      entityId:  req.params.id,
+      action:    'viewed',
+    }).catch(() => {});
+
     const auditLog = await db.collection('audit_logs')
       .find({ entityId: req.params.id })
       .sort({ timestamp: -1 })
