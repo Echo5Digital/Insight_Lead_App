@@ -41,12 +41,7 @@ app.use(express.json({ limit: '2mb' }));
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 
 // ── Health ────────────────────────────────────────────────────────────────────
-app.get('/api/health', (_, res) => res.json({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-  encKeyLength: (process.env.ENCRYPTION_KEY || '').length,
-  encKeyPrefix: (process.env.ENCRYPTION_KEY || '').slice(0, 4),
-}));
+app.get('/api/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // ── WordPress plugin (legacy + new webhook) ───────────────────────────────────
 app.post('/api/ingest/lead',    ingestLead);
