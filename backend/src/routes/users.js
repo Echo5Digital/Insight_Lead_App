@@ -1,6 +1,14 @@
 const { getDb, ObjectId }          = require('../lib/mongo');
 const { requireAuth, requireRole, hashPassword } = require('../lib/auth');
 
+function validatePassword(password) {
+  if (!password || password.length < 8)      return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password))               return 'Password must contain at least one uppercase letter';
+  if (!/[0-9]/.test(password))               return 'Password must contain at least one number';
+  if (!/[^A-Za-z0-9]/.test(password))        return 'Password must contain at least one special character';
+  return null;
+}
+
 // GET /api/users  (admin only)
 async function getUsers(req, res) {
   try {
@@ -29,6 +37,9 @@ async function createUser(req, res) {
     if (!['admin', 'staff', 'readonly'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
+
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
 
     const existing = await db.collection('users').findOne({ email: email.toLowerCase().trim() });
     if (existing) return res.status(400).json({ error: 'Email already in use' });
@@ -68,6 +79,8 @@ async function updateUser(req, res) {
     if (req.body.name   !== undefined) set.name   = req.body.name;
 
     if (req.body.password) {
+      const pwError = validatePassword(req.body.password);
+      if (pwError) return res.status(400).json({ error: pwError });
       set.passwordHash = await hashPassword(req.body.password);
     }
 

@@ -10,42 +10,82 @@ async function getDb() {
   await client.connect();
   db = client.db(process.env.MONGODB_DB || 'insightlead');
 
+  // Helper: create index without crashing getDb() if it already exists or is incompatible
+  const idx = (col, spec, opts) => col.createIndex(spec, opts || {}).catch(e =>
+    console.log('[MongoDB] index note:', e.message)
+  );
+
   // Leads
   const leads = db.collection('leads');
-  await leads.createIndex({ tenantId: 1, createdAt: -1 });
-  await leads.createIndex({ tenantId: 1, status: 1 });
-  await leads.createIndex({ tenantId: 1, convertedToPatient: 1 });
-  await leads.createIndex(
-    { tenantId: 1, email: 1 },
-    { unique: true, partialFilterExpression: { email: { $exists: true, $ne: '' } } }
-  );
+  await idx(leads, { tenantId: 1, createdAt: -1 });
+  await idx(leads, { tenantId: 1, status: 1 });
+  await idx(leads, { tenantId: 1, convertedToPatient: 1 });
+  // Uniqueness now enforced via emailSearch hash (encrypted email is not directly comparable)
+  await idx(leads, { tenantId: 1, emailSearch: 1 }, { unique: true, sparse: true });
+  // Drop old email unique index if it exists (was incompatible with this MongoDB version)
+  await leads.dropIndex('tenantId_1_email_1').catch(() => {});
 
   // Patients
   const patients = db.collection('patients');
-  await patients.createIndex({ tenantId: 1, createdAt: -1 });
-  await patients.createIndex({ tenantId: 1, status: 1 });
-  await patients.createIndex({ tenantId: 1, category: 1 });
-  await patients.createIndex({ tenantId: 1, intakeAppt: 1 });
-  await patients.createIndex({ tenantId: 1, testAppt: 1 });
-  await patients.createIndex({ tenantId: 1, feedbackAppt: 1 });
-  await patients.createIndex({ tenantId: 1, referralDate: 1 });
+  await idx(patients, { tenantId: 1, createdAt: -1 });
+  await idx(patients, { tenantId: 1, status: 1 });
+  await idx(patients, { tenantId: 1, category: 1 });
+  await idx(patients, { tenantId: 1, intakeAppt: 1 });
+  await idx(patients, { tenantId: 1, testAppt: 1 });
+  await idx(patients, { tenantId: 1, feedbackAppt: 1 });
+  await idx(patients, { tenantId: 1, referralDate: 1 });
 
   // Users
   const users = db.collection('users');
-  await users.createIndex({ email: 1 }, { unique: true });
-  await users.createIndex({ tenantId: 1 });
+  await idx(users, { email: 1 }, { unique: true });
+  await idx(users, { tenantId: 1 });
 
-  // Audit log
+  // Audit log — append-only (HIPAA requirement)
   const audit = db.collection('audit_logs');
-  await audit.createIndex({ tenantId: 1, timestamp: -1 });
-  await audit.createIndex({ entityId: 1, entityType: 1 });
+  await idx(audit, { tenantId: 1, timestamp: -1 });
+  await idx(audit, { entityId: 1, entityType: 1 });
+
+  // Apply schema validator to enforce required fields on every insert
+  try {
+    await db.command({
+      collMod: 'audit_logs',
+      validator: {
+        $jsonSchema: {
+          bsonType: 'object',
+          required: ['tenantId', 'userId', 'action', 'timestamp'],
+          properties: {
+            tenantId:  { bsonType: 'string' },
+            userId:    { bsonType: 'string' },
+            action:    { bsonType: 'string' },
+            timestamp: { bsonType: 'date' },
+          },
+        },
+      },
+      validationAction: 'error',
+      validationLevel:  'strict',
+    });
+  } catch (e) {
+    // Collection may not exist on first run — that is fine
+    console.log('[MongoDB] audit_logs validator:', e.message);
+  }
+
+  // Wrap the audit collection in a Proxy that blocks any mutation other than insertOne
+  const _rawAudit = db.collection('audit_logs');
+  const BLOCKED_OPS = ['updateOne','updateMany','findOneAndUpdate','deleteOne','deleteMany','findOneAndDelete','replaceOne','drop'];
+  db._auditCol = new Proxy(_rawAudit, {
+    get(target, prop) {
+      if (BLOCKED_OPS.includes(String(prop))) {
+        return () => { throw new Error('[HIPAA] audit_logs is append-only — updates and deletes are forbidden'); };
+      }
+      return typeof target[prop] === 'function' ? target[prop].bind(target) : target[prop];
+    },
+  });
 
   // API keys
-  const apiKeys = db.collection('api_keys');
-  await apiKeys.createIndex({ keyHash: 1 });
+  await idx(db.collection('api_keys'), { keyHash: 1 });
 
   // Settings
-  await db.collection('settings').createIndex({ tenantId: 1 }, { unique: true });
+  await idx(db.collection('settings'), { tenantId: 1 }, { unique: true });
 
   console.log('[MongoDB] Connected to', process.env.MONGODB_DB || 'insightlead');
   return db;
@@ -65,10 +105,10 @@ async function verifyApiKey(rawKey) {
   return record ? record.tenantId : null;
 }
 
-// Write an audit log entry
+// Write an audit log entry (append-only — HIPAA)
 async function writeAudit({ tenantId, userId, userName, entityType, entityId, action, changedFields = [] }) {
   const database = await getDb();
-  await database.collection('audit_logs').insertOne({
+  await database._auditCol.insertOne({
     tenantId,
     userId,
     userName,
@@ -88,7 +128,7 @@ const DEFAULT_SETTINGS = {
     gfeLookback: 100,
     outstandingLookback: 90,
   },
-  statusList:        ['In Progress', 'Complete', 'Not Moving Forward', 'On Hold', 'Denied', 'No Response'],
+  statusList:        ['In Progress', 'Complete', 'Not Moving Forward', 'Waiting on Insurance', 'Waiting'],
   insuranceList: [
     'Aetna', 'Aetna Better', 'Ambetter', 'BCBS', 'BCBS/Medicaid', 'BCBS/SoonerCare',
     'BlueLinc', 'Cash Pay', 'Cigna', 'Healthcare Hwy', 'Healthchoice', 'Humana',
@@ -107,16 +147,27 @@ const DEFAULT_SETTINGS = {
     'PSO', 'Psychiatric Wellness', 'Psychiatrist', 'Red Rock', 'Serenity',
     'Serenity Psych', 'Shines', 'Summit Health', 'Village Center Pedi', 'Website',
   ],
+  doctorList: [],
+  psychList: [],
 };
 
 async function getSettings(tenantId) {
   const database = await getDb();
   const doc = await database.collection('settings').findOne({ tenantId });
+
+  const DEPRECATED_STATUSES = ['On Hold', 'Denied', 'No Response'];
+  const REQUIRED_STATUSES   = ['Waiting on Insurance', 'Waiting'];
+
   if (doc) {
-    // Merge with defaults so new keys always exist
+    let statusList = doc.statusList || DEFAULT_SETTINGS.statusList;
+    // Strip deprecated statuses and ensure required ones exist
+    statusList = statusList.filter(s => !DEPRECATED_STATUSES.includes(s));
+    REQUIRED_STATUSES.forEach(s => { if (!statusList.includes(s)) statusList.push(s); });
+
     return {
       ...DEFAULT_SETTINGS,
       ...doc,
+      statusList,
       appointmentDays: { ...DEFAULT_SETTINGS.appointmentDays, ...(doc.appointmentDays || {}) },
     };
   }

@@ -6,11 +6,11 @@ import { api } from '@/lib/api';
 import { fmtDate, toInputDate, fmtCurrency, timeAgo, cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { ConfirmModal } from '@/components/ui/Modal';
-import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
+import { Select, Input, Textarea } from '@/components/ui/FormField';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Edit2, Save, X, Trash2, CheckCircle, Circle } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Trash2, CheckCircle, Circle, Plus } from 'lucide-react';
 import type { Patient, AuditLog, Settings } from '@/types';
 
 const MILESTONES = [
@@ -132,6 +132,12 @@ export default function PatientDetailPage() {
     finally { setSaving(false); }
   };
 
+  const handleAddReferralSource = async (newSource: string) => {
+    const newList = [...(settings?.referralSourceList || []), newSource].sort();
+    await api.put('/settings', { referralSourceList: newList });
+    setSettings(s => s ? { ...s, referralSourceList: newList } : s);
+  };
+
   if (loading) return <div className="p-6"><PageSpinner /></div>;
   if (!patient) return <div className="p-6 text-slate-500">Patient not found.</div>;
 
@@ -233,6 +239,7 @@ export default function PatientDetailPage() {
             <Row label="Name">
               {editing ? <Input className="py-1.5 text-sm" value={form.name || ''} onChange={e => setForm(p => ({...p, name: e.target.value}))} /> : <span className="text-sm text-slate-700">{patient.name}</span>}
             </Row>
+            <Row label="Guardian Name">{f('guardianName')}</Row>
             <Row label="Phone">{f('phone')}</Row>
             <Row label="Email">{f('email')}</Row>
             <Row label="DOB">{dateF('dob')}</Row>
@@ -256,8 +263,26 @@ export default function PatientDetailPage() {
             </Row>
             <Row label="Referral Source">
               {editing
-                ? <Select options={settings?.referralSourceList || []} placeholder="Select…" value={form.referralSource || ''} onChange={e => setForm(p => ({...p, referralSource: e.target.value}))} />
+                ? <AddableSelect
+                    options={settings?.referralSourceList || []}
+                    placeholder="Select…"
+                    value={form.referralSource || ''}
+                    onSelect={val => setForm(p => ({...p, referralSource: val}))}
+                    onAddNew={handleAddReferralSource}
+                  />
                 : <span className="text-sm text-slate-700">{patient.referralSource || '—'}</span>
+              }
+            </Row>
+            <Row label="Doctor">
+              {editing
+                ? <Select options={settings?.doctorList || []} placeholder="Select…" value={form.doctor || ''} onChange={e => setForm(p => ({...p, doctor: e.target.value}))} />
+                : <span className="text-sm text-slate-700">{patient.doctor || '—'}</span>
+              }
+            </Row>
+            <Row label="Psychologist">
+              {editing
+                ? <Select options={settings?.psychList || []} placeholder="Select…" value={form.psych || ''} onChange={e => setForm(p => ({...p, psych: e.target.value}))} />
+                : <span className="text-sm text-slate-700">{patient.psych || '—'}</span>
               }
             </Row>
           </Section>
@@ -307,6 +332,96 @@ export default function PatientDetailPage() {
             </div>
           </Section>
 
+          {/* Re-Pre-Auth */}
+          <Section title="Re-Pre-Authorization">
+            <p className="text-xs text-slate-400 mb-3">Check when re-pre-auth has been sent to billing (confirm insurance before each appointment).</p>
+            <div className="flex flex-col gap-3">
+              {([
+                ['rePreAuthIntake',   'Intake Appt Re-Pre-Auth'],
+                ['rePreAuthTest',     'Test Appt Re-Pre-Auth'],
+                ['rePreAuthFeedback', 'Feedback Appt Re-Pre-Auth'],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    disabled={!canWrite}
+                    checked={!!(milestoneForm[key as keyof Patient])}
+                    onChange={async e => {
+                      const val = e.target.checked;
+                      setMilestoneForm(prev => ({ ...prev, [key]: val }));
+                      try {
+                        await api.put(`/patients/${id}`, { [key]: val });
+                        toast.success(`${label} ${val ? 'checked' : 'unchecked'}`);
+                        load();
+                      } catch { toast.error('Update failed'); }
+                    }}
+                    className="w-4 h-4 rounded text-brand"
+                  />
+                  <span className="text-sm text-slate-700">{label}</span>
+                  {!!(patient?.[key as keyof Patient]) && (
+                    <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">Done</span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </Section>
+
+          {/* Appeals */}
+          <Section title="Appeals">
+            <p className="text-xs text-slate-400 mb-3">Track appeal dates sent and received from client and billing.</p>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+              {([
+                ['appealsSentClient',  'Sent to Client'],
+                ['appealsRecClient',   'Received from Client'],
+                ['appealsSentBilling', 'Sent to Billing'],
+                ['appealsRecBilling',  'Received from Billing'],
+              ] as const).map(([key, label]) => (
+                <Row key={key} label={label}>
+                  {canWrite
+                    ? <input
+                        type="date"
+                        className="input-base py-1.5 text-sm"
+                        value={toInputDate(milestoneForm[key as keyof Patient] as string)}
+                        onChange={e => {
+                          setMilestoneForm(prev => ({ ...prev, [key]: e.target.value || null }));
+                          setMilestoneDirty(true);
+                          milestoneDirtyRef.current = true;
+                        }}
+                      />
+                    : <span className="text-sm text-slate-700">{fmtDate(patient?.[key as keyof Patient] as string)}</span>
+                  }
+                </Row>
+              ))}
+              <Row label="Outcome">
+                {canWrite
+                  ? <select
+                      className="input-base py-1.5 text-sm"
+                      value={(milestoneForm.appealsOutcome as string) || ''}
+                      onChange={async e => {
+                        const val = e.target.value || undefined;
+                        setMilestoneForm(prev => ({ ...prev, appealsOutcome: val as Patient['appealsOutcome'] }));
+                        try {
+                          await api.put(`/patients/${id}`, { appealsOutcome: val || '' });
+                          toast.success('Outcome saved');
+                          load();
+                        } catch { toast.error('Update failed'); }
+                      }}>
+                      <option value="">— Not set —</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Denied">Denied</option>
+                    </select>
+                  : <span className={cn('text-sm font-medium',
+                      patient?.appealsOutcome === 'Approved' ? 'text-emerald-600' :
+                      patient?.appealsOutcome === 'Denied'   ? 'text-red-600' :
+                      patient?.appealsOutcome === 'Pending'  ? 'text-amber-600' : 'text-slate-400')}>
+                      {patient?.appealsOutcome || '—'}
+                    </span>
+                }
+              </Row>
+            </div>
+          </Section>
+
           {/* Audit Log */}
           <Section title="Activity Log">
             {auditLog.length === 0
@@ -352,6 +467,47 @@ export default function PatientDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function AddableSelect({
+  options, value, placeholder, onSelect, onAddNew,
+}: {
+  options: string[]; value: string; placeholder?: string;
+  onSelect: (val: string) => void;
+  onAddNew: (newVal: string) => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newVal, setNewVal] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = newVal.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try { await onAddNew(trimmed); onSelect(trimmed); setAdding(false); setNewVal(''); }
+    finally { setSaving(false); }
+  };
+
+  if (adding) {
+    return (
+      <div className="flex gap-1">
+        <input autoFocus className="input-base text-sm flex-1 py-1.5"
+          placeholder="Enter new source…" value={newVal}
+          onChange={e => setNewVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setAdding(false); setNewVal(''); } }} />
+        <button onClick={save} disabled={saving} className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1">
+          <Plus size={12} />{saving ? '…' : 'Add'}
+        </button>
+        <button onClick={() => { setAdding(false); setNewVal(''); }} className="btn-secondary text-xs px-2 py-1.5">
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <Select options={[...options, '+ Add new…']} value={value} placeholder={placeholder}
+      onChange={e => { if (e.target.value === '+ Add new…') setAdding(true); else onSelect(e.target.value); }} />
   );
 }
 

@@ -10,7 +10,7 @@ const webhookLeads  = require('./src/routes/webhook');
 const { login, logout, getMe }                          = require('./src/routes/auth');
 const { getLeads, getLead, createLead, updateLead, convertLead, deleteLead } = require('./src/routes/leads');
 const { getPatients, getPatient, createPatient, updatePatient, deletePatient, bulkDeletePatients, exportCsv } = require('./src/routes/patients');
-const { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown } = require('./src/routes/dashboard');
+const { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown, getOutstandingAppeals, getStatusTimeSeries } = require('./src/routes/dashboard');
 const { fetchSettings, saveSettings }   = require('./src/routes/settings');
 const { getUsers, createUser, updateUser } = require('./src/routes/users');
 const setup                             = require('./src/routes/setup');
@@ -78,6 +78,8 @@ app.get('/api/dashboard/tasks',            requireAuth, getTasks);
 app.get('/api/dashboard/new-patients',     requireAuth, getNewPatients);
 app.get('/api/dashboard/forms-stats',      requireAuth, getFormsStats);
 app.get('/api/dashboard/status-breakdown', requireAuth, getStatusBreakdown);
+app.get('/api/dashboard/appeals',           requireAuth, getOutstandingAppeals);
+app.get('/api/dashboard/status-timeseries', requireAuth, getStatusTimeSeries);
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 app.get('/api/settings', requireAuth,                       fetchSettings);

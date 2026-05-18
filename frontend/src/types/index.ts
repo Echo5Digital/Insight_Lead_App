@@ -60,6 +60,21 @@ export interface Patient {
   intakePD?: number;
   testPD?: number;
   feedbackPD?: number;
+  // Appeals
+  appealsSentClient?: string;
+  appealsRecClient?: string;
+  appealsSentBilling?: string;
+  appealsRecBilling?: string;
+  appealsOutcome?: 'Pending' | 'Approved' | 'Denied';
+  // Re-Pre-Authorization checkboxes
+  rePreAuthIntake?: boolean;
+  rePreAuthTest?: boolean;
+  rePreAuthFeedback?: boolean;
+  // Clinician assignments
+  doctor?: string;
+  psych?: string;
+  // Guardian
+  guardianName?: string;
   // Flag: imported without name, needs update
   needsName?: boolean;
   excelRow?: number;
@@ -95,6 +110,8 @@ export interface Settings {
   statusList: string[];
   insuranceList: string[];
   referralSourceList: string[];
+  doctorList: string[];
+  psychList: string[];
 }
 
 export interface DashboardStats {

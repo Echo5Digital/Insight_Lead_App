@@ -1,4 +1,4 @@
-const { getDb } = require('../lib/mongo');
+const { getDb, writeAudit } = require('../lib/mongo');
 const {
   createToken, checkPassword, hashPassword,
   setAuthCookie, clearAuthCookie, requireAuth,
@@ -16,10 +16,16 @@ async function login(req, res) {
       active: true,
     });
 
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      await writeAudit({ tenantId: 'unknown', userId: 'system', userName: 'system', entityType: 'auth', entityId: email.toLowerCase().trim(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'user_not_found' }] }).catch(() => {});
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
     const ok = await checkPassword(password, user.passwordHash);
-    if (!ok)  return res.status(401).json({ error: 'Invalid credentials' });
+    if (!ok) {
+      await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'wrong_password' }] }).catch(() => {});
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
     await db.collection('users').updateOne(
       { _id: user._id },
@@ -35,6 +41,8 @@ async function login(req, res) {
     });
 
     setAuthCookie(res, token);
+
+    await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_success' }).catch(() => {});
 
     res.json({
       token,

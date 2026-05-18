@@ -1,4 +1,5 @@
-const { getDb, verifyApiKey } = require('../lib/mongo');
+const { getDb, verifyApiKey }                            = require('../lib/mongo');
+const { encrypt, searchHash, nameSearchTokens }          = require('../lib/encryption');
 
 module.exports = async function ingestLead(req, res) {
   try {
@@ -21,16 +22,37 @@ module.exports = async function ingestLead(req, res) {
 
     const db = await getDb();
 
+    // Duplicate check using deterministic emailSearch hash (encrypted email is non-comparable)
+    if (email) {
+      const eHash = searchHash(email);
+      const existing = await db.collection('leads').findOne({ tenantId, emailSearch: eHash });
+      if (existing) {
+        console.log('[LEAD] Duplicate skipped (emailSearch):', email);
+        return res.status(200).json({ message: 'Duplicate skipped' });
+      }
+    }
+
+    const firstName = (body.first_name || '').trim();
+    const lastName  = (body.last_name  || '').trim();
+    const notes     = (body.notes      || '').trim();
+
     const lead = {
       tenantId,
-      firstName:    (body.first_name  || '').trim(),
-      lastName:     (body.last_name   || '').trim(),
-      email:        email || undefined,
-      phone:        phone || undefined,
+      firstName:    firstName ? encrypt(firstName) : undefined,
+      lastName:     lastName  ? encrypt(lastName)  : undefined,
+      email:        email     ? encrypt(email)      : undefined,
+      phone:        phone     ? encrypt(phone)      : undefined,
+      notes:        notes     ? encrypt(notes)      : undefined,
+      // Search hashes for encrypted fields
+      firstNameSearch: firstName ? searchHash(firstName) : undefined,
+      lastNameSearch:  lastName  ? searchHash(lastName)  : undefined,
+      nameTokens:      nameSearchTokens([firstName, lastName].filter(Boolean).join(' ')),
+      emailSearch:     email     ? searchHash(email)     : undefined,
+      phoneSearch:     phone     ? searchHash(phone)     : undefined,
+      // Non-PHI fields stored in plaintext
       city:         (body.city        || '').trim(),
       source:       body.source       || body.utm_source || 'website',
       interest:     (body.interest    || '').trim(),
-      notes:        (body.notes       || '').trim(),
       utmSource:    body.utm_source   || '',
       utmMedium:    body.utm_medium   || '',
       utmCampaign:  body.utm_campaign || '',
@@ -61,7 +83,7 @@ module.exports = async function ingestLead(req, res) {
       createdAt: new Date(),
     });
 
-    console.log(`[LEAD] ${lead.firstName} ${lead.lastName} <${lead.email || lead.phone}> | ${lead.formId} | tenant: ${tenantId}`);
+    console.log(`[LEAD] ${firstName} ${lastName} | formId:${lead.formId} | tenant:${tenantId}`);
 
     return res.status(201).json({ leadId, message: 'Lead received' });
 

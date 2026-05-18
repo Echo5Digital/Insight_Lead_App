@@ -13,7 +13,7 @@ async function fetchSettings(req, res) {
 
 async function saveSettings(req, res) {
   try {
-    const allowed = ['appointmentDays', 'statusList', 'insuranceList', 'referralSourceList'];
+    const allowed = ['appointmentDays', 'statusList', 'insuranceList', 'referralSourceList', 'doctorList', 'psychList'];
     const patch   = {};
     allowed.forEach(k => {
       if (req.body[k] !== undefined) patch[k] = req.body[k];

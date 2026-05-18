@@ -7,7 +7,7 @@ import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ArrowRight, CheckCircle, User, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, User, Calendar, DollarSign, Plus, X } from 'lucide-react';
 import type { Settings, Patient } from '@/types';
 
 const STEPS = [
@@ -18,6 +18,68 @@ const STEPS = [
 
 type FormData = Partial<Patient> & Record<string, string | number | null>;
 
+/* ── AddableSelect ─────────────────────────────────────────────────────────── */
+function AddableSelect({
+  options,
+  value,
+  placeholder,
+  onSelect,
+  onAddNew,
+}: {
+  options: string[];
+  value: string;
+  placeholder?: string;
+  onSelect: (val: string) => void;
+  onAddNew: (newVal: string) => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newVal, setNewVal] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = newVal.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      await onAddNew(trimmed);
+      onSelect(trimmed);
+      setAdding(false);
+      setNewVal('');
+    } finally { setSaving(false); }
+  };
+
+  if (adding) {
+    return (
+      <div className="flex gap-1">
+        <input autoFocus className="input-base text-sm flex-1 py-1.5"
+          placeholder="Enter new source…" value={newVal}
+          onChange={e => setNewVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setAdding(false); setNewVal(''); } }} />
+        <button onClick={save} disabled={saving}
+          className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1">
+          <Plus size={12} />{saving ? '…' : 'Add'}
+        </button>
+        <button onClick={() => { setAdding(false); setNewVal(''); }}
+          className="btn-secondary text-xs px-2 py-1.5">
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      options={[...options, '+ Add new…']}
+      value={value}
+      placeholder={placeholder}
+      onChange={e => {
+        if (e.target.value === '+ Add new…') setAdding(true);
+        else onSelect(e.target.value);
+      }}
+    />
+  );
+}
+
 function NewPatientForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -26,9 +88,11 @@ function NewPatientForm() {
   // Pre-fill category from query param (e.g. ?category=Pain+Management)
   const rawCategory = searchParams.get('category') || 'Standard';
 
+  const today = new Date().toISOString().split('T')[0];
+
   const [step,     setStep]     = useState(0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: rawCategory } as any);
+  const [form,     setForm]     = useState<FormData>({ status: 'In Progress', category: rawCategory, referralDate: today } as any);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving,   setSaving]   = useState(false);
 
@@ -40,12 +104,18 @@ function NewPatientForm() {
   const set = (key: string, val: string | number | null) => setForm(p => ({ ...p, [key]: val }));
   const g   = (key: string) => (form[key] as string) || '';
 
+  const handleAddReferralSource = async (newSource: string) => {
+    const newList = [...(settings?.referralSourceList || []), newSource].sort();
+    await api.put('/settings', { referralSourceList: newList });
+    setSettings(s => s ? { ...s, referralSourceList: newList } : s);
+  };
+
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      const res = await api.post<{ patientId: string }>('/patients', form);
+      await api.post<{ patientId: string }>('/patients', form);
       toast.success('Patient created!');
-      router.push(`/patients/${res.patientId}`);
+      router.push('/patients');
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
@@ -104,6 +174,9 @@ function NewPatientForm() {
               <Field label="Full Name" required className="col-span-2">
                 <Input value={g('name')} onChange={e => set('name', e.target.value)} placeholder="Patient full name" />
               </Field>
+              <Field label="Guardian Name" className="col-span-2">
+                <Input value={g('guardianName')} onChange={e => set('guardianName', e.target.value)} placeholder="Guardian / parent name (if applicable)" />
+              </Field>
               <Field label="Phone"><Input value={g('phone')} onChange={e => set('phone', e.target.value)} placeholder="405-000-0000" /></Field>
               <Field label="Date of Birth"><Input type="date" value={g('dob')} onChange={e => set('dob', e.target.value)} /></Field>
               <Field label="Email" className="col-span-2"><Input type="email" value={g('email')} onChange={e => set('email', e.target.value)} /></Field>
@@ -114,10 +187,22 @@ function NewPatientForm() {
                 <Select options={['Standard','Pain Management']} value={g('category')} onChange={e => set('category', e.target.value)} />
               </Field>
               <Field label="Referral Source" className="col-span-2">
-                <Select options={settings?.referralSourceList || []} placeholder="Select source…" value={g('referralSource')} onChange={e => set('referralSource', e.target.value)} />
+                <AddableSelect
+                  options={settings?.referralSourceList || []}
+                  placeholder="Select source…"
+                  value={g('referralSource')}
+                  onSelect={val => set('referralSource', val)}
+                  onAddNew={handleAddReferralSource}
+                />
+              </Field>
+              <Field label="Doctor">
+                <Select options={settings?.doctorList || []} placeholder="Select doctor…" value={g('doctor')} onChange={e => set('doctor', e.target.value)} />
+              </Field>
+              <Field label="Psychologist">
+                <Select options={settings?.psychList || []} placeholder="Select psych…" value={g('psych')} onChange={e => set('psych', e.target.value)} />
               </Field>
               <Field label="Status" className="col-span-2">
-                <Select options={settings?.statusList || ['In Progress','Complete','On Hold','Denied','No Response','Not Moving Forward']} value={g('status')} onChange={e => set('status', e.target.value)} />
+                <Select options={settings?.statusList || ['In Progress','Complete','Not Moving Forward','Waiting on Insurance','Waiting']} value={g('status')} onChange={e => set('status', e.target.value)} />
               </Field>
               <Field label="Notes" className="col-span-2">
                 <Textarea rows={3} value={g('notes')} onChange={e => set('notes', e.target.value)} placeholder="Any additional notes…" />
@@ -141,14 +226,59 @@ function NewPatientForm() {
                 ['GFE Sent',            'gfeSent'],
                 ['GFE Received',        'gfeRec'],
                 ['Intake Appointment',  'intakeAppt'],
-                ['Test Appointment',    'testAppt'],
                 ['Feedback Appointment','feedbackAppt'],
+                ['Test Appointment',    'testAppt'],
               ].map(([label, key]) => (
                 <Field key={key} label={label}>
                   <Input type="date" value={g(key)} onChange={e => set(key, e.target.value)} />
                 </Field>
               ))}
             </div>
+
+            {/* Re-Pre-Auth checkboxes */}
+            <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-600 mb-3">Re-Pre-Authorization (send to billing before each appt)</p>
+              <div className="flex flex-wrap gap-5">
+                {([
+                  ['rePreAuthIntake',   'Intake'],
+                  ['rePreAuthTest',     'Test'],
+                  ['rePreAuthFeedback', 'Feedback'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!form[key]} onChange={e => set(key, e.target.checked ? 'true' : '')}
+                      className="w-4 h-4 rounded text-brand" />
+                    <span className="text-sm text-slate-700">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Appeals dates */}
+            <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-600 mb-3">Appeals (if applicable)</p>
+              <div className="grid grid-cols-2 gap-4">
+                {([
+                  ['Sent to Client',       'appealsSentClient'],
+                  ['Received from Client', 'appealsRecClient'],
+                  ['Sent to Billing',      'appealsSentBilling'],
+                  ['Received from Billing','appealsRecBilling'],
+                ] as const).map(([label, key]) => (
+                  <Field key={key} label={label}>
+                    <Input type="date" value={g(key)} onChange={e => set(key, e.target.value)} />
+                  </Field>
+                ))}
+                <Field label="Outcome" className="col-span-2">
+                  <select className="input-base text-sm w-full" value={g('appealsOutcome')}
+                    onChange={e => set('appealsOutcome', e.target.value)}>
+                    <option value="">— Not set —</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Denied">Denied</option>
+                  </select>
+                </Field>
+              </div>
+            </div>
+
             {/* Live cycle preview */}
             {(i2t != null || t2f != null || i2f != null) && (
               <div className="bg-slate-50 rounded-xl p-4 mt-2">
@@ -191,6 +321,8 @@ function NewPatientForm() {
                 <div><span className="text-slate-500">Status:</span> <span className="font-medium">{g('status')}</span></div>
                 <div><span className="text-slate-500">Insurance:</span> <span className="font-medium">{g('insurance') || '—'}</span></div>
                 <div><span className="text-slate-500">Category:</span> <span className="font-medium">{g('category')}</span></div>
+                {g('doctor') && <div><span className="text-slate-500">Doctor:</span> <span className="font-medium">{g('doctor')}</span></div>}
+                {g('psych') && <div><span className="text-slate-500">Psych:</span> <span className="font-medium">{g('psych')}</span></div>}
                 {i2f != null && <div className="col-span-2"><span className="text-slate-500">Total Cycle:</span> <span className="font-medium text-brand">{i2f} days</span></div>}
               </div>
             </div>

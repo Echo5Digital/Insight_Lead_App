@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { fmtDate, timeAgo, cn } from '@/lib/utils';
+import { fmtDate, cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import { Plus, Search, RefreshCw, UserPlus, Trash2, Edit2 } from 'lucide-react';
 import type { Lead, Settings } from '@/types';
 
-const LEAD_STATUSES = ['New','Contacted','Forms Sent','No Response','Converted','Not Moving Forward'];
+const LEAD_STATUSES = ['New','Contact 1','Contact 2','Contact 3','No Response','Converted','Not Moving Forward'];
 
 export default function LeadsPage() {
   const router     = useRouter();
@@ -30,9 +30,10 @@ export default function LeadsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
 
   // Filters
-  const [search,   setSearch]   = useState('');
-  const [status,   setStatus]   = useState('');
-  const [source,   setSource]   = useState('');
+  const [search,       setSearch]       = useState('');
+  const [status,       setStatus]       = useState('');
+  const [source,       setSource]       = useState('');
+  const [hideArchived, setHideArchived] = useState(true);
 
   // Modals
   const [editLead,    setEditLead]    = useState<Lead | null>(null);
@@ -55,11 +56,13 @@ export default function LeadsPage() {
       if (search) params.set('search', search);
       if (status) params.set('status', status);
       if (source) params.set('referralSource', source);
+      // When no specific status is selected, hide "Not Moving Forward" by default
+      if (hideArchived && !status) params.set('hideArchived', 'true');
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads); setTotal(data.total); setPages(data.pages);
     } catch { toast.error('Failed to load leads'); }
     finally { setLoading(false); }
-  }, [page, search, status, source]);
+  }, [page, search, status, source, hideArchived]);
 
   useEffect(() => { api.get<Settings>('/settings').then(setSettings).catch(() => {}); }, []);
   useEffect(() => { loadLeads(); }, [loadLeads]);
@@ -153,6 +156,12 @@ export default function LeadsPage() {
           <option value="">All sources</option>
           {(settings?.referralSourceList || []).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
+          <input type="checkbox" checked={!hideArchived}
+            onChange={e => { setHideArchived(!e.target.checked); setPage(1); }}
+            className="rounded text-brand" />
+          <span className="text-sm text-slate-600">Show Not Moving Forward</span>
+        </label>
         <button onClick={loadLeads} className="btn-secondary flex items-center gap-1.5 text-sm">
           <RefreshCw size={13} /> Refresh
         </button>

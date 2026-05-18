@@ -27,6 +27,8 @@ export default function SettingsPage() {
   const [newInsurance,  setNewInsurance]  = useState('');
   const [newReferral,   setNewReferral]   = useState('');
   const [newStatus,     setNewStatus]     = useState('');
+  const [newDoctor,     setNewDoctor]     = useState('');
+  const [newPsych,      setNewPsych]      = useState('');
   const [localSettings, setLocalSettings] = useState<Settings | null>(null);
 
   // New user modal
@@ -66,17 +68,19 @@ export default function SettingsPage() {
         statusList:         localSettings.statusList,
         insuranceList:      localSettings.insuranceList,
         referralSourceList: localSettings.referralSourceList,
+        doctorList:         localSettings.doctorList,
+        psychList:          localSettings.psychList,
       });
       toast.success('Saved successfully');
     } catch { toast.error('Save failed'); }
     finally { setSaving(false); }
   };
 
-  const removeTag = (list: 'insuranceList' | 'referralSourceList' | 'statusList', val: string) => {
-    setLocalSettings(s => s ? { ...s, [list]: s[list].filter(v => v !== val) } : s);
+  const removeTag = (list: 'insuranceList' | 'referralSourceList' | 'statusList' | 'doctorList' | 'psychList', val: string) => {
+    setLocalSettings(s => s ? { ...s, [list]: (s[list] as string[]).filter(v => v !== val) } : s);
   };
 
-  const addTag = (list: 'insuranceList' | 'referralSourceList' | 'statusList', val: string, clear: () => void) => {
+  const addTag = (list: 'insuranceList' | 'referralSourceList' | 'statusList' | 'doctorList' | 'psychList', val: string, clear: () => void) => {
     const trimmed = val.trim();
     if (!trimmed) return;
     setLocalSettings(s => {
@@ -211,6 +215,58 @@ export default function SettingsPage() {
             onChange={e => setNewReferral(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addTag('referralSourceList', newReferral, () => setNewReferral(''))} />
           <button onClick={() => addTag('referralSourceList', newReferral, () => setNewReferral(''))} className="btn-secondary px-3"><Plus size={14} /></button>
+        </div>
+        <button onClick={handleSaveLists} disabled={saving} className="btn-primary mt-3 flex items-center gap-2 text-sm">
+          <Save size={13} />Save Lists
+        </button>
+      </div>
+
+      {/* Doctor List */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <h3 className="section-title mb-1">Doctor Options</h3>
+        <p className="text-sm text-slate-500 mb-4">{localSettings?.doctorList?.length ?? 0} options — used in patient doctor dropdown</p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {(localSettings?.doctorList || []).map(v => (
+            <span key={v} className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm">
+              {v}
+              <button onClick={() => removeTag('doctorList', v)} className="text-slate-400 hover:text-red-500 transition-colors ml-1"><X size={12} /></button>
+            </span>
+          ))}
+          {(localSettings?.doctorList || []).length === 0 && (
+            <p className="text-sm text-slate-400">No doctors added yet.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input className="input-base flex-1 text-sm" placeholder="Add doctor name…" value={newDoctor}
+            onChange={e => setNewDoctor(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addTag('doctorList', newDoctor, () => setNewDoctor(''))} />
+          <button onClick={() => addTag('doctorList', newDoctor, () => setNewDoctor(''))} className="btn-secondary px-3"><Plus size={14} /></button>
+        </div>
+        <button onClick={handleSaveLists} disabled={saving} className="btn-primary mt-3 flex items-center gap-2 text-sm">
+          <Save size={13} />Save Lists
+        </button>
+      </div>
+
+      {/* Psych List */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <h3 className="section-title mb-1">Psychologist Options</h3>
+        <p className="text-sm text-slate-500 mb-4">{localSettings?.psychList?.length ?? 0} options — used in patient psychologist dropdown</p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {(localSettings?.psychList || []).map(v => (
+            <span key={v} className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm">
+              {v}
+              <button onClick={() => removeTag('psychList', v)} className="text-slate-400 hover:text-red-500 transition-colors ml-1"><X size={12} /></button>
+            </span>
+          ))}
+          {(localSettings?.psychList || []).length === 0 && (
+            <p className="text-sm text-slate-400">No psychologists added yet.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input className="input-base flex-1 text-sm" placeholder="Add psychologist name…" value={newPsych}
+            onChange={e => setNewPsych(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addTag('psychList', newPsych, () => setNewPsych(''))} />
+          <button onClick={() => addTag('psychList', newPsych, () => setNewPsych(''))} className="btn-secondary px-3"><Plus size={14} /></button>
         </div>
         <button onClick={handleSaveLists} disabled={saving} className="btn-primary mt-3 flex items-center gap-2 text-sm">
           <Save size={13} />Save Lists

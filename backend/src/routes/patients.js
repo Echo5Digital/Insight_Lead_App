@@ -1,5 +1,27 @@
-const { getDb, ObjectId, writeAudit } = require('../lib/mongo');
-const { requireAuth, requireRole }    = require('../lib/auth');
+const { getDb, ObjectId, writeAudit }              = require('../lib/mongo');
+const { requireAuth, requireRole }                 = require('../lib/auth');
+const { encrypt, decrypt, searchHash, nameSearchTokens } = require('../lib/encryption');
+
+// PHI fields that must be encrypted at rest
+const PHI_ENCRYPT = ['name', 'phone', 'email', 'notes', 'insurance'];
+
+function encryptPatient(doc) {
+  const out = { ...doc };
+  PHI_ENCRYPT.forEach(f => { if (out[f] != null) out[f] = encrypt(out[f]); });
+  // Store deterministic search hashes alongside encrypted values
+  if (doc.name  != null) out.nameTokens   = nameSearchTokens(doc.name);
+  if (doc.email != null) out.emailSearch  = searchHash(doc.email);
+  if (doc.phone != null) out.phoneSearch  = searchHash(doc.phone);
+  if (doc.insurance != null) out.insuranceSearch = searchHash(doc.insurance);
+  return out;
+}
+
+function decryptPatient(doc) {
+  if (!doc) return doc;
+  const out = { ...doc };
+  PHI_ENCRYPT.forEach(f => { if (out[f] != null) out[f] = decrypt(out[f]); });
+  return out;
+}
 
 function computeFields(doc) {
   // Rules 1-3: Math.floor, only when BOTH dates exist, otherwise explicit null
@@ -24,9 +46,10 @@ function computeFields(doc) {
   return out;
 }
 
-const DATE_FIELDS   = ['dob','referralDate','referralRecDate','formsSent','formsRec','preAuthSent','preAuthRec','gfeSent','gfeRec','intakeAppt','testAppt','feedbackAppt'];
+const DATE_FIELDS   = ['dob','referralDate','referralRecDate','formsSent','formsRec','preAuthSent','preAuthRec','gfeSent','gfeRec','intakeAppt','testAppt','feedbackAppt','appealsSentClient','appealsRecClient','appealsSentBilling','appealsRecBilling'];
 const NUMBER_FIELDS = ['copay','intakePaid','testingPaid','balance','intakePD','testPD','feedbackPD'];
-const STRING_FIELDS = ['name','phone','email','insurance','referralSource','category','status','notes'];
+const STRING_FIELDS = ['name','phone','email','insurance','referralSource','category','status','notes','doctor','psych','guardianName','appealsOutcome'];
+const BOOL_FIELDS   = ['rePreAuthIntake','rePreAuthTest','rePreAuthFeedback'];
 
 function buildUpdate(body) {
   const set = {}, unset = {};
@@ -46,6 +69,9 @@ function buildUpdate(body) {
       set[f] = isNaN(n) ? null : n;
     }
   });
+  BOOL_FIELDS.forEach(f => {
+    if (body[f] !== undefined) set[f] = !!body[f];
+  });
   // Merge set + unset-removed fields for computed fields
   const merged = { ...body };
   Object.keys(unset).forEach(k => delete merged[k]);
@@ -61,7 +87,7 @@ async function getPatients(req, res) {
     const filter   = { tenantId };
 
     if (req.query.status)         filter.status         = req.query.status;
-    if (req.query.insurance)      filter.insurance      = req.query.insurance;
+    if (req.query.insurance)      filter.insuranceSearch = searchHash(req.query.insurance);
     if (req.query.referralSource) filter.referralSource = req.query.referralSource;
     if (req.query.category)       filter.category       = req.query.category;
     if (req.query.dateFrom || req.query.dateTo) {
@@ -70,8 +96,13 @@ async function getPatients(req, res) {
       if (req.query.dateTo)   filter.referralDate.$lte = new Date(req.query.dateTo);
     }
     if (req.query.search) {
-      const rx = new RegExp(req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ name: rx }, { email: rx }, { phone: rx }];
+      const term   = req.query.search.trim();
+      const tokens = nameSearchTokens(term);
+      const orClauses = [];
+      if (tokens.length) orClauses.push({ nameTokens: { $in: tokens } });
+      orClauses.push({ emailSearch: searchHash(term) });
+      orClauses.push({ phoneSearch: searchHash(term) });
+      filter.$or = orClauses;
     }
     if (req.query.needsName === 'true') {
       filter.needsName = true;
@@ -88,7 +119,7 @@ async function getPatients(req, res) {
       db.collection('patients').countDocuments(filter),
     ]);
 
-    res.json({ patients, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ patients: patients.map(decryptPatient), total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error('[patients]', err);
     res.status(500).json({ error: 'Server error' });
@@ -110,7 +141,7 @@ async function exportCsv(req, res) {
     const n = (v) => (v != null) ? v : '';
     const s = (v) => v ? `"${String(v).replace(/"/g,'""')}"` : '';
 
-    const rows = patients.map(p => [
+    const rows = patients.map(decryptPatient).map(p => [
       s(p.patientId), s(p.name), s(p.phone), s(p.email), d(p.dob), s(p.insurance), s(p.referralSource),
       s(p.category), s(p.status), d(p.referralDate), d(p.formsSent), d(p.formsRec),
       d(p.preAuthSent), d(p.preAuthRec), d(p.gfeSent), d(p.gfeRec),
@@ -121,6 +152,9 @@ async function exportCsv(req, res) {
     ].join(','));
 
     const csv = [headers.join(','), ...rows].join('\n');
+
+    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: 'bulk', action: 'csv_exported', changedFields: [{ field: 'count', newValue: patients.length }] });
+
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="patients.csv"');
     res.send(csv);
@@ -143,7 +177,7 @@ async function getPatient(req, res) {
       .limit(50)
       .toArray();
 
-    res.json({ patient, auditLog });
+    res.json({ patient: decryptPatient(patient), auditLog });
   } catch (err) {
     console.error('[patient-detail]', err);
     res.status(500).json({ error: 'Server error' });
@@ -156,7 +190,7 @@ async function createPatient(req, res) {
     const db       = await getDb();
     const tenantId = req.user.tenantId;
     const { set }  = buildUpdate(req.body);
-    const doc = { ...set, tenantId, createdBy: req.user.userId, lastModifiedBy: req.user.userId, createdAt: new Date(), updatedAt: new Date() };
+    const doc = encryptPatient({ ...set, tenantId, createdBy: req.user.userId, lastModifiedBy: req.user.userId, createdAt: new Date(), updatedAt: new Date() });
 
     const result = await db.collection('patients').insertOne(doc);
     await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: result.insertedId.toString(), action: 'created' });
@@ -175,6 +209,24 @@ async function updatePatient(req, res) {
     const old      = await db.collection('patients').findOne({ _id: new ObjectId(req.params.id), tenantId });
 
     const { set, unset } = buildUpdate(req.body);
+
+    // Build changed-fields audit before encrypting (use decrypted old values for readability)
+    const decryptedOld = decryptPatient(old);
+    const changedFields = Object.keys(set)
+      .filter(f => !['updatedAt','lastModifiedBy'].includes(f) && old && JSON.stringify(set[f]) !== JSON.stringify(old[f]))
+      .map(f => ({
+        field:    f,
+        oldValue: PHI_ENCRYPT.includes(f) ? '[PHI]' : decryptedOld?.[f],
+        newValue: PHI_ENCRYPT.includes(f) ? '[PHI]' : set[f],
+      }));
+
+    // Encrypt PHI fields before writing to MongoDB
+    PHI_ENCRYPT.forEach(f => { if (set[f] != null) set[f] = encrypt(set[f]); });
+    if (req.body.name     != null) set.nameTokens      = nameSearchTokens(req.body.name);
+    if (req.body.email    != null) set.emailSearch     = searchHash(req.body.email);
+    if (req.body.phone    != null) set.phoneSearch     = searchHash(req.body.phone);
+    if (req.body.insurance != null) set.insuranceSearch = searchHash(req.body.insurance);
+
     set.updatedAt      = new Date();
     set.lastModifiedBy = req.user.userId;
 
@@ -182,10 +234,6 @@ async function updatePatient(req, res) {
     if (Object.keys(unset).length) mongoUpdate.$unset = unset;
 
     await db.collection('patients').updateOne({ _id: new ObjectId(req.params.id), tenantId }, mongoUpdate);
-
-    const changedFields = Object.keys(set)
-      .filter(f => !['updatedAt','lastModifiedBy'].includes(f) && old && JSON.stringify(set[f]) !== JSON.stringify(old[f]))
-      .map(f => ({ field: f, oldValue: old?.[f], newValue: set[f] }));
 
     await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: req.params.id, action: req.body.status ? 'status_changed' : 'updated', changedFields });
     res.json({ message: 'Updated' });

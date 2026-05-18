@@ -1,25 +1,46 @@
-const { getDb, getSettings } = require('../lib/mongo');
-const { requireAuth }        = require('../lib/auth');
+const { getDb, getSettings }    = require('../lib/mongo');
+const { requireAuth }           = require('../lib/auth');
+const { decrypt }               = require('../lib/encryption');
 
-// GET /api/dashboard/stats
+function decryptPatient(doc) {
+  if (!doc) return doc;
+  const out = { ...doc };
+  ['name', 'phone', 'email', 'notes', 'insurance'].forEach(f => {
+    if (out[f] != null) out[f] = decrypt(out[f]);
+  });
+  return out;
+}
+
+// GET /api/dashboard/stats?dateFrom=&dateTo=
 async function getStats(req, res) {
   try {
     const db       = await getDb();
     const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo } = req.query;
+
+    // Build an optional createdAt date range filter
+    const dateMatch = {};
+    if (dateFrom || dateTo) {
+      dateMatch.createdAt = {};
+      if (dateFrom) dateMatch.createdAt.$gte = new Date(dateFrom);
+      if (dateTo)   dateMatch.createdAt.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
+    }
+
+    const pm = { tenantId, ...dateMatch }; // patient match
+    const lm = { tenantId, ...dateMatch }; // lead match
 
     const [
       totalLeads, totalPatients,
       activePatients, completePatients, deniedPatients,
-      convertedLeads,
-      formsComplete,
+      convertedLeads, formsComplete,
     ] = await Promise.all([
-      db.collection('leads').countDocuments({ tenantId }),
-      db.collection('patients').countDocuments({ tenantId }),
-      db.collection('patients').countDocuments({ tenantId, status: 'In Progress' }),
-      db.collection('patients').countDocuments({ tenantId, status: 'Complete' }),
-      db.collection('patients').countDocuments({ tenantId, status: { $in: ['Denied', 'Not Moving Forward'] } }),
-      db.collection('leads').countDocuments({ tenantId, convertedToPatient: true }),
-      db.collection('patients').countDocuments({ tenantId, formsCompleted: true }),
+      db.collection('leads').countDocuments(lm),
+      db.collection('patients').countDocuments(pm),
+      db.collection('patients').countDocuments({ ...pm, status: 'In Progress' }),
+      db.collection('patients').countDocuments({ ...pm, status: 'Complete' }),
+      db.collection('patients').countDocuments({ ...pm, status: { $in: ['Denied', 'Not Moving Forward'] } }),
+      db.collection('leads').countDocuments({ ...lm, convertedToPatient: true }),
+      db.collection('patients').countDocuments({ ...pm, formsCompleted: true }),
     ]);
 
     const conversionRate = totalLeads > 0
@@ -30,15 +51,15 @@ async function getStats(req, res) {
       ? Math.round((formsComplete / totalPatients) * 100)
       : 0;
 
-    // Avg intake→feedback all time
+    // Avg intake→feedback — filtered by the same date window
     const pipeline = [
-      { $match: { tenantId, intakeAppt: { $exists: true }, feedbackAppt: { $exists: true } } },
+      { $match: { ...pm, intakeAppt: { $exists: true }, feedbackAppt: { $exists: true } } },
       { $group: { _id: null, avg: { $avg: '$intakeToFeedbackDays' } } },
     ];
     const avgResult = await db.collection('patients').aggregate(pipeline).toArray();
     const avgDays   = avgResult[0] ? Math.round(avgResult[0].avg) : null;
 
-    // Recent activity (last 15)
+    // Recent activity — always last 15, never date-filtered
     const recentActivity = await db.collection('audit_logs')
       .find({ tenantId })
       .sort({ timestamp: -1 })
@@ -214,22 +235,33 @@ async function getAppointments(req, res) {
     const settings = await getSettings(tenantId);
     const cfg      = settings.appointmentDays;
 
-    const now    = new Date();
-    const future = days => new Date(now.getTime() + days * 86400000);
-    const past   = days => new Date(now.getTime() - days * 86400000);
+    const now      = new Date();
+    const future   = days => new Date(now.getTime() + days * 86400000);
+    const past     = days => new Date(now.getTime() - days * 86400000);
+
+    // Optional date range from query params; fall back to default window
+    const fromDate = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+    const toDate   = req.query.dateTo
+      ? new Date(new Date(req.query.dateTo).getTime() + 86399999)
+      : null;
+
+    // Optional extra filters
+    const extra = {};
+    if (req.query.insurance) extra.insurance = req.query.insurance;
+    if (req.query.category)  extra.category  = req.query.category;
 
     const [intake, test, feedback, gfe] = await Promise.all([
       db.collection('patients').find({
-        tenantId,
-        intakeAppt: { $gte: now, $lte: future(cfg.intake) },
+        tenantId, ...extra,
+        intakeAppt: { $gte: fromDate || now, $lte: toDate || future(cfg.intake) },
       }).sort({ intakeAppt: 1 }).toArray(),
       db.collection('patients').find({
-        tenantId,
-        testAppt: { $gte: now, $lte: future(cfg.test) },
+        tenantId, ...extra,
+        testAppt: { $gte: fromDate || now, $lte: toDate || future(cfg.test) },
       }).sort({ testAppt: 1 }).toArray(),
       db.collection('patients').find({
-        tenantId,
-        feedbackAppt: { $gte: now, $lte: future(cfg.feedback) },
+        tenantId, ...extra,
+        feedbackAppt: { $gte: fromDate || now, $lte: toDate || future(cfg.feedback) },
       }).sort({ feedbackAppt: 1 }).toArray(),
       db.collection('patients').find({
         tenantId,
@@ -237,7 +269,13 @@ async function getAppointments(req, res) {
       }).sort({ gfeSent: -1 }).toArray(),
     ]);
 
-    res.json({ intake, test, feedback, gfe, config: cfg });
+    res.json({
+      intake:   intake.map(decryptPatient),
+      test:     test.map(decryptPatient),
+      feedback: feedback.map(decryptPatient),
+      gfe:      gfe.map(decryptPatient),
+      config:   cfg,
+    });
   } catch (err) {
     console.error('[appointments]', err);
     res.status(500).json({ error: 'Server error' });
@@ -268,19 +306,23 @@ async function getTasks(req, res) {
       }).sort({ testAppt: 1 }).toArray(),
     ]);
 
-    res.json({ missingIntake, missingTest, missingFeedback });
+    res.json({
+      missingIntake:    missingIntake.map(decryptPatient),
+      missingTest:      missingTest.map(decryptPatient),
+      missingFeedback:  missingFeedback.map(decryptPatient),
+    });
   } catch (err) {
     console.error('[tasks]', err);
     res.status(500).json({ error: 'Server error' });
   }
 }
 
-// GET /api/dashboard/new-patients?dateFrom=&dateTo=
+// GET /api/dashboard/new-patients?dateFrom=&dateTo=&groupBy=day|week|month
 async function getNewPatients(req, res) {
   try {
     const db       = await getDb();
     const tenantId = req.user.tenantId;
-    const { dateFrom, dateTo } = req.query;
+    const { dateFrom, dateTo, groupBy = 'day' } = req.query;
 
     const match = { tenantId };
     if (dateFrom || dateTo) {
@@ -289,25 +331,67 @@ async function getNewPatients(req, res) {
       if (dateTo)   match.createdAt.$lte = new Date(new Date(dateTo).setHours(23,59,59,999));
     }
 
+    let groupId;
+    if (groupBy === 'month') {
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
+    } else if (groupBy === 'week') {
+      groupId = { year: { $isoWeekYear: '$createdAt' }, week: { $isoWeek: '$createdAt' } };
+    } else {
+      groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
+    }
+
+    const pipeline = [
+      { $match: match },
+      { $group: { _id: groupId, count: { $sum: 1 } } },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.week': 1 } },
+    ];
+
+    const data = await db.collection('patients').aggregate(pipeline).toArray();
+    res.json({ data, groupBy });
+  } catch (err) {
+    console.error('[new-patients]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// GET /api/dashboard/status-timeseries?dateFrom=&dateTo=&groupBy=day|week|month
+async function getStatusTimeSeries(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo, groupBy = 'day' } = req.query;
+
+    const match = { tenantId };
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) match.createdAt.$gte = new Date(dateFrom);
+      if (dateTo)   match.createdAt.$lte = new Date(new Date(dateTo).setHours(23,59,59,999));
+    }
+
+    let timePart;
+    if (groupBy === 'month') {
+      timePart = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
+    } else if (groupBy === 'week') {
+      timePart = { year: { $isoWeekYear: '$createdAt' }, week: { $isoWeek: '$createdAt' } };
+    } else {
+      timePart = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
+    }
+
     const pipeline = [
       { $match: match },
       {
         $group: {
-          _id: {
-            year:  { $year:  '$createdAt' },
-            month: { $month: '$createdAt' },
-            day:   { $dayOfMonth: '$createdAt' },
-          },
+          _id: { ...timePart, status: '$status' },
           count: { $sum: 1 },
         },
       },
-      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.week': 1 } },
     ];
 
     const data = await db.collection('patients').aggregate(pipeline).toArray();
-    res.json({ data });
+    res.json({ data, groupBy });
   } catch (err) {
-    console.error('[new-patients]', err);
+    console.error('[status-timeseries]', err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -387,4 +471,26 @@ async function getStatusBreakdown(req, res) {
   }
 }
 
-module.exports = { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown };
+// GET /api/dashboard/appeals  — patients with sent-but-not-received appeals
+async function getOutstandingAppeals(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+
+    // Match patients where at least one appeal is sent but the corresponding received date is missing
+    const patients = await db.collection('patients').find({
+      tenantId,
+      $or: [
+        { appealsSentClient:  { $exists: true, $ne: null }, appealsRecClient:  null },
+        { appealsSentBilling: { $exists: true, $ne: null }, appealsRecBilling: null },
+      ],
+    }).sort({ appealsSentClient: -1 }).toArray();
+
+    res.json({ appeals: patients.map(decryptPatient), total: patients.length });
+  } catch (err) {
+    console.error('[appeals]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+module.exports = { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown, getOutstandingAppeals, getStatusTimeSeries };
