@@ -17,13 +17,13 @@ async function login(req, res) {
     });
 
     if (!user) {
-      await writeAudit({ tenantId: 'unknown', userId: 'system', userName: 'system', entityType: 'auth', entityId: email.toLowerCase().trim(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'user_not_found' }] }).catch(() => {});
+      await writeAudit({ tenantId: 'unknown', userId: 'system', userName: 'system', email: email.toLowerCase().trim(), entityType: 'auth', entityId: email.toLowerCase().trim(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'user_not_found' }] }).catch(() => {});
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const ok = await checkPassword(password, user.passwordHash);
     if (!ok) {
-      await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'wrong_password' }] }).catch(() => {});
+      await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.name || user.email, email: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_failed', changedFields: [{ field: 'reason', newValue: 'wrong_password' }] }).catch(() => {});
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -42,7 +42,7 @@ async function login(req, res) {
 
     setAuthCookie(res, token);
 
-    await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_success' }).catch(() => {});
+    await writeAudit({ tenantId: user.tenantId, userId: user._id.toString(), userName: user.name || user.email, email: user.email, entityType: 'auth', entityId: user._id.toString(), action: 'login_success' }).catch(() => {});
 
     res.json({
       token,

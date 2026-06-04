@@ -287,23 +287,43 @@ async function getTasks(req, res) {
   try {
     const db       = await getDb();
     const tenantId = req.user.tenantId;
+    const { dateFrom, dateTo } = req.query;
+
+    // Build a date range condition for a given field, or null if no dates given
+    function dateRange(field) {
+      if (!dateFrom && !dateTo) return null;
+      const cond = {};
+      if (dateFrom) cond.$gte = new Date(dateFrom);
+      if (dateTo)   cond.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
+      return { [field]: cond };
+    }
+
+    // Missing Intake: formsSent exists, no intakeAppt — date range applies to formsSent
+    const intakeFilter = Object.assign(
+      { tenantId, formsSent: { $exists: true, $ne: null }, intakeAppt: { $exists: false } },
+      dateRange('formsSent') || {}
+    );
+    // When a date range is applied, override the existence check with the range (which implies exists+not-null)
+    if (dateFrom || dateTo) intakeFilter.formsSent = dateRange('formsSent').formsSent;
+
+    // Missing Test: intakeAppt exists, no testAppt — date range applies to intakeAppt
+    const testFilter = Object.assign(
+      { tenantId, intakeAppt: { $exists: true, $ne: null }, testAppt: { $exists: false } },
+      dateRange('intakeAppt') || {}
+    );
+    if (dateFrom || dateTo) testFilter.intakeAppt = dateRange('intakeAppt').intakeAppt;
+
+    // Missing Feedback: testAppt exists, no feedbackAppt — date range applies to testAppt
+    const feedbackFilter = Object.assign(
+      { tenantId, testAppt: { $exists: true, $ne: null }, feedbackAppt: { $exists: false } },
+      dateRange('testAppt') || {}
+    );
+    if (dateFrom || dateTo) feedbackFilter.testAppt = dateRange('testAppt').testAppt;
 
     const [missingIntake, missingTest, missingFeedback] = await Promise.all([
-      db.collection('patients').find({
-        tenantId,
-        formsSent:  { $exists: true, $ne: null },
-        intakeAppt: { $exists: false },
-      }).sort({ createdAt: -1 }).toArray(),
-      db.collection('patients').find({
-        tenantId,
-        intakeAppt: { $exists: true, $ne: null },
-        testAppt:   { $exists: false },
-      }).sort({ intakeAppt: 1 }).toArray(),
-      db.collection('patients').find({
-        tenantId,
-        testAppt:     { $exists: true, $ne: null },
-        feedbackAppt: { $exists: false },
-      }).sort({ testAppt: 1 }).toArray(),
+      db.collection('patients').find(intakeFilter).sort({ formsSent: -1 }).toArray(),
+      db.collection('patients').find(testFilter).sort({ intakeAppt: 1 }).toArray(),
+      db.collection('patients').find(feedbackFilter).sort({ testAppt: 1 }).toArray(),
     ]);
 
     res.json({
