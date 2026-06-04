@@ -13,6 +13,7 @@ const { getPatients, getPatient, createPatient, updatePatient, deletePatient, bu
 const { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown, getOutstandingAppeals, getStatusTimeSeries } = require('./src/routes/dashboard');
 const { fetchSettings, saveSettings }   = require('./src/routes/settings');
 const { getUsers, createUser, updateUser } = require('./src/routes/users');
+const { getAuditLogs }                     = require('./src/routes/audit');
 const setup                             = require('./src/routes/setup');
 const { requireAuth, requireRole }      = require('./src/lib/auth');
 
@@ -92,6 +93,9 @@ app.put('/api/settings', requireAuth, requireRole('admin'), saveSettings);
 app.get('/api/users',     requireAuth, requireRole('admin'), getUsers);
 app.post('/api/users',    requireAuth, requireRole('admin'), createUser);
 app.put('/api/users/:id', requireAuth, requireRole('admin'), updateUser);
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+app.get('/api/audit', requireAuth, requireRole('admin'), getAuditLogs);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_, res) => res.status(404).json({ error: 'Not found' }));

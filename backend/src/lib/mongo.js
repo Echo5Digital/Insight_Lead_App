@@ -106,7 +106,12 @@ async function verifyApiKey(rawKey) {
 }
 
 // Write an audit log entry (append-only — HIPAA)
-async function writeAudit({ tenantId, userId, userName, entityType, entityId, action, changedFields = [] }) {
+// Emails listed in AUDIT_EXCLUDE_EMAILS (.env, comma-separated) are never stored.
+const _auditExcluded = new Set(
+  (process.env.AUDIT_EXCLUDE_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+);
+async function writeAudit({ tenantId, userId, userName, email, entityType, entityId, action, changedFields = [] }) {
+  if (email && _auditExcluded.has(email.toLowerCase())) return;
   const database = await getDb();
   await database._auditCol.insertOne({
     tenantId,

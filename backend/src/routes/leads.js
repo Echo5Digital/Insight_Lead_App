@@ -97,7 +97,7 @@ async function createLead(req, res) {
     const doc = encryptLead(raw);
 
     const result = await db.collection('leads').insertOne(doc);
-    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'lead', entityId: result.insertedId.toString(), action: 'created' });
+    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email, entityType: 'lead', entityId: result.insertedId.toString(), action: 'created' });
     res.status(201).json({ leadId: result.insertedId });
   } catch (err) {
     console.error('[create-lead]', err);
@@ -134,7 +134,7 @@ async function updateLead(req, res) {
 
     await db.collection('leads').updateOne({ _id: new ObjectId(req.params.id), tenantId }, { $set: set });
 
-    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'lead', entityId: req.params.id, action: req.body.status ? 'status_changed' : 'updated', changedFields });
+    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email, entityType: 'lead', entityId: req.params.id, action: req.body.status ? 'status_changed' : 'updated', changedFields });
     res.json({ message: 'Updated' });
   } catch (err) {
     console.error('[update-lead]', err);
@@ -189,7 +189,7 @@ async function convertLead(req, res) {
       { $set: { convertedToPatient: true, patientId: patResult.insertedId.toString(), status: 'Converted', updatedAt: new Date() } }
     );
 
-    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'lead', entityId: req.params.id, action: 'converted', changedFields: [{ field: 'patientId', newValue: patResult.insertedId.toString() }] });
+    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email, entityType: 'lead', entityId: req.params.id, action: 'converted', changedFields: [{ field: 'patientId', newValue: patResult.insertedId.toString() }] });
     res.json({ patientId: patResult.insertedId });
   } catch (err) {
     console.error('[convert-lead]', err);
@@ -202,7 +202,7 @@ async function deleteLead(req, res) {
   try {
     const db = await getDb();
     await db.collection('leads').deleteOne({ _id: new ObjectId(req.params.id), tenantId: req.user.tenantId });
-    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'lead', entityId: req.params.id, action: 'deleted' });
+    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email, entityType: 'lead', entityId: req.params.id, action: 'deleted' });
     res.json({ message: 'Deleted' });
   } catch (err) {
     console.error('[delete-lead]', err);

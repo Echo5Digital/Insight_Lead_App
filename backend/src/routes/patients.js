@@ -91,9 +91,11 @@ async function getPatients(req, res) {
     if (req.query.referralSource) filter.referralSource = req.query.referralSource;
     if (req.query.category)       filter.category       = req.query.category;
     if (req.query.dateFrom || req.query.dateTo) {
-      filter.referralDate = {};
-      if (req.query.dateFrom) filter.referralDate.$gte = new Date(req.query.dateFrom);
-      if (req.query.dateTo)   filter.referralDate.$lte = new Date(req.query.dateTo);
+      const ALLOWED_DATE_FIELDS = ['referralDate','formsSent','formsRec','preAuthSent','preAuthRec','gfeSent','gfeRec','intakeAppt','testAppt','feedbackAppt'];
+      const field = ALLOWED_DATE_FIELDS.includes(req.query.dateField) ? req.query.dateField : 'referralDate';
+      filter[field] = {};
+      if (req.query.dateFrom) filter[field].$gte = new Date(req.query.dateFrom);
+      if (req.query.dateTo)   filter[field].$lte = new Date(new Date(req.query.dateTo).setHours(23, 59, 59, 999));
     }
     if (req.query.search) {
       const term   = req.query.search.trim();
@@ -153,7 +155,7 @@ async function exportCsv(req, res) {
 
     const csv = [headers.join(','), ...rows].join('\n');
 
-    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: 'bulk', action: 'csv_exported', changedFields: [{ field: 'count', newValue: patients.length }] });
+    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email,entityType: 'patient', entityId: 'bulk', action: 'csv_exported', changedFields: [{ field: 'count', newValue: patients.length }] });
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="patients.csv"');
@@ -173,12 +175,13 @@ async function getPatient(req, res) {
 
     // HIPAA: log every PHI access (read)
     await writeAudit({
-      tenantId:  req.user.tenantId,
-      userId:    req.user.userId,
-      userName:  req.user.name || req.user.email,
-      entityType: 'patient',
-      entityId:  req.params.id,
-      action:    'viewed',
+      tenantId:        req.user.tenantId,
+      userId:          req.user.userId,
+      userName:        req.user.name || req.user.email,
+      excludeFromAudit: !!req.user.excludeFromAudit,
+      entityType:      'patient',
+      entityId:        req.params.id,
+      action:          'viewed',
     }).catch(() => {});
 
     const auditLog = await db.collection('audit_logs')
@@ -203,7 +206,7 @@ async function createPatient(req, res) {
     const doc = encryptPatient({ ...set, tenantId, createdBy: req.user.userId, lastModifiedBy: req.user.userId, createdAt: new Date(), updatedAt: new Date() });
 
     const result = await db.collection('patients').insertOne(doc);
-    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: result.insertedId.toString(), action: 'created' });
+    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email,entityType: 'patient', entityId: result.insertedId.toString(), action: 'created' });
     res.status(201).json({ patientId: result.insertedId });
   } catch (err) {
     console.error('[create-patient]', err);
@@ -245,7 +248,7 @@ async function updatePatient(req, res) {
 
     await db.collection('patients').updateOne({ _id: new ObjectId(req.params.id), tenantId }, mongoUpdate);
 
-    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: req.params.id, action: req.body.status ? 'status_changed' : 'updated', changedFields });
+    await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email,entityType: 'patient', entityId: req.params.id, action: req.body.status ? 'status_changed' : 'updated', changedFields });
     res.json({ message: 'Updated' });
   } catch (err) {
     console.error('[update-patient]', err);
@@ -258,7 +261,7 @@ async function deletePatient(req, res) {
   try {
     const db = await getDb();
     await db.collection('patients').deleteOne({ _id: new ObjectId(req.params.id), tenantId: req.user.tenantId });
-    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: req.params.id, action: 'deleted' });
+    await writeAudit({ tenantId: req.user.tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email,entityType: 'patient', entityId: req.params.id, action: 'deleted' });
     res.json({ message: 'Deleted' });
   } catch (err) {
     console.error('[delete-patient]', err);
@@ -278,7 +281,7 @@ async function bulkDeletePatients(req, res) {
     const result    = await db.collection('patients').deleteMany({ _id: { $in: objectIds }, tenantId });
 
     for (const id of ids) {
-      await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, entityType: 'patient', entityId: id, action: 'deleted' });
+      await writeAudit({ tenantId, userId: req.user.userId, userName: req.user.name || req.user.email, email: req.user.email,entityType: 'patient', entityId: id, action: 'deleted' });
     }
 
     res.json({ deleted: result.deletedCount });

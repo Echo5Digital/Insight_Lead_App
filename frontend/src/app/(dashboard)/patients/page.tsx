@@ -11,7 +11,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, Download, Trash2, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, Download, Trash2, SlidersHorizontal, CalendarDays, X } from 'lucide-react';
 import type { Patient, Settings } from '@/types';
 
 const COLUMNS = [
@@ -45,6 +45,66 @@ function rowBg(status?: string) {
   return STATUS_COLORS[(status || '').toLowerCase()] || '';
 }
 
+// ── Date filter helpers ────────────────────────────────────────────────────────
+
+const DATE_PRESETS = [
+  { key: 'today',     label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'thisweek',  label: 'This Week' },
+  { key: 'lastweek',  label: 'Last Week' },
+  { key: 'thismonth', label: 'This Month' },
+  { key: 'lastmonth', label: 'Last Month' },
+  { key: 'last30',    label: 'Last 30d' },
+  { key: 'last60',    label: 'Last 60d' },
+  { key: 'last90',    label: 'Last 90d' },
+];
+
+const DATE_FIELDS_MAP: Record<string, string> = {
+  referralDate:  'Referral Date',
+  formsSent:     'Forms Sent',
+  formsRec:      'Forms Received',
+  preAuthSent:   'Pre-Auth Sent',
+  preAuthRec:    'Pre-Auth Received',
+  gfeSent:       'GFE Sent',
+  gfeRec:        'GFE Received',
+  intakeAppt:    'Intake Appt',
+  testAppt:      'Test Appt',
+  feedbackAppt:  'Feedback Appt',
+};
+
+function getDatePreset(key: string): { from: string; to: string } {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  if (key === 'today')     { return { from: fmt(today), to: fmt(today) }; }
+  if (key === 'yesterday') { const y = new Date(today); y.setDate(today.getDate() - 1); return { from: fmt(y), to: fmt(y) }; }
+  if (key === 'thisweek')  {
+    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
+    const sun = new Date(mon);   sun.setDate(mon.getDate() + 6);
+    return { from: fmt(mon), to: fmt(sun) };
+  }
+  if (key === 'lastweek')  {
+    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() - 6);
+    const sun = new Date(mon);   sun.setDate(mon.getDate() + 6);
+    return { from: fmt(mon), to: fmt(sun) };
+  }
+  if (key === 'thismonth') {
+    const s = new Date(today.getFullYear(), today.getMonth(), 1);
+    const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: fmt(s), to: fmt(e) };
+  }
+  if (key === 'lastmonth') {
+    const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const e = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { from: fmt(s), to: fmt(e) };
+  }
+  if (key === 'last30') { const s = new Date(today); s.setDate(today.getDate() - 29); return { from: fmt(s), to: fmt(today) }; }
+  if (key === 'last60') { const s = new Date(today); s.setDate(today.getDate() - 59); return { from: fmt(s), to: fmt(today) }; }
+  if (key === 'last90') { const s = new Date(today); s.setDate(today.getDate() - 89); return { from: fmt(s), to: fmt(today) }; }
+  return { from: '', to: '' };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 function PatientsInner() {
   const { user }     = useAuth();
   const isAdmin      = user?.role === 'admin';
@@ -68,14 +128,25 @@ function PatientsInner() {
   const [editingDate, setEditingDate] = useState<{ id: string; field: EditableField } | null>(null);
 
   // Filters — pre-filled from URL query params when navigating from dashboard/referrals
-  const [search,    setSearch]    = useState(() => searchParams.get('search')         || '');
-  const [status,    setStatus]    = useState(() => searchParams.get('status')         || '');
-  const [insurance, setInsurance] = useState(() => searchParams.get('insurance')      || '');
-  const [category,  setCategory]  = useState(() => searchParams.get('category')       || '');
-  const [source,    setSource]    = useState(() => searchParams.get('referralSource') || '');
-  const [dateFrom,  setDateFrom]  = useState(() => searchParams.get('dateFrom')       || '');
-  const [dateTo,    setDateTo]    = useState(() => searchParams.get('dateTo')         || '');
-  const [needsName, setNeedsName] = useState(false);
+  const [search,     setSearch]     = useState(() => searchParams.get('search')         || '');
+  const [status,     setStatus]     = useState(() => searchParams.get('status')         || '');
+  const [insurance,  setInsurance]  = useState(() => searchParams.get('insurance')      || '');
+  const [category,   setCategory]   = useState(() => searchParams.get('category')       || '');
+  const [source,     setSource]     = useState(() => searchParams.get('referralSource') || '');
+  const [dateFrom,   setDateFrom]   = useState(() => searchParams.get('dateFrom')       || '');
+  const [dateTo,     setDateTo]     = useState(() => searchParams.get('dateTo')         || '');
+  const [dateField,  setDateField]  = useState(() => searchParams.get('dateField')      || 'referralDate');
+  const [datePreset, setDatePreset] = useState('');
+  const [needsName,  setNeedsName]  = useState(false);
+
+  const applyPreset = (key: string) => {
+    const { from, to } = getDatePreset(key);
+    setDateFrom(from); setDateTo(to); setDatePreset(key); setPage(1);
+  };
+
+  const clearDateFilter = () => {
+    setDateFrom(''); setDateTo(''); setDatePreset(''); setPage(1);
+  };
 
   const loadPatients = useCallback(async () => {
     setLoading(true);
@@ -88,12 +159,13 @@ function PatientsInner() {
       if (source)    params.set('referralSource', source);
       if (dateFrom)  params.set('dateFrom',       dateFrom);
       if (dateTo)    params.set('dateTo',         dateTo);
+      if (dateFrom || dateTo) params.set('dateField', dateField);
       if (needsName) params.set('needsName',      'true');
       const data = await api.get<{ patients: Patient[]; total: number; pages: number }>(`/patients?${params}`);
       setPatients(data.patients); setTotal(data.total); setPages(data.pages);
     } catch { toast.error('Failed to load patients'); }
     finally { setLoading(false); }
-  }, [page, search, status, insurance, category, source, dateFrom, dateTo, needsName, sortBy, sortDir]);
+  }, [page, search, status, insurance, category, source, dateFrom, dateTo, dateField, needsName, sortBy, sortDir]);
 
   useEffect(() => { api.get<Settings>('/settings').then(setSettings).catch(() => {}); }, []);
   useEffect(() => { loadPatients(); }, [loadPatients]);
@@ -191,6 +263,7 @@ function PatientsInner() {
     </th>
   );
 
+  const hasDateFilter = !!(dateFrom || dateTo);
 
   return (
     <div className="p-6">
@@ -238,8 +311,8 @@ function PatientsInner() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-slate-100 flex flex-wrap gap-3">
+      {/* Basic Filters */}
+      <div className="bg-white rounded-xl p-4 mb-3 shadow-sm border border-slate-100 flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input className="input-base pl-8 text-sm" placeholder="Search name, email, phone…" value={search}
@@ -267,6 +340,91 @@ function PatientsInner() {
           <button onClick={() => setBulkModal(true)} className="btn-danger flex items-center gap-1.5 text-sm">
             <Trash2 size={13} /> Delete {selected.size} selected
           </button>
+        )}
+      </div>
+
+      {/* Advanced Date Filter */}
+      <div className={cn(
+        'bg-white rounded-xl p-4 mb-4 shadow-sm border transition-colors',
+        hasDateFilter ? 'border-brand/30 bg-brand/[0.02]' : 'border-slate-100'
+      )}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-1.5">
+            <CalendarDays size={14} className={cn(hasDateFilter ? 'text-brand' : 'text-slate-400')} />
+            <span className={cn('text-xs font-semibold', hasDateFilter ? 'text-brand' : 'text-slate-500')}>
+              Date Filter
+            </span>
+          </div>
+
+          {/* Date field selector */}
+          <select
+            className="input-base text-xs w-44"
+            value={dateField}
+            onChange={e => { setDateField(e.target.value); setPage(1); }}
+          >
+            {Object.entries(DATE_FIELDS_MAP).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+
+          {/* Preset buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            {DATE_PRESETS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => applyPreset(p.key)}
+                className={cn(
+                  'text-xs px-2.5 py-1 rounded-full border font-medium transition-all',
+                  datePreset === p.key
+                    ? 'bg-brand text-white border-brand shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand'
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom range inputs */}
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <span className="text-xs text-slate-400 font-medium">From</span>
+            <input
+              type="date"
+              className="input-base text-xs w-36"
+              value={dateFrom}
+              onChange={e => { setDateFrom(e.target.value); setDatePreset(''); setPage(1); }}
+            />
+            <span className="text-xs text-slate-400 font-medium">To</span>
+            <input
+              type="date"
+              className="input-base text-xs w-36"
+              value={dateTo}
+              onChange={e => { setDateTo(e.target.value); setDatePreset(''); setPage(1); }}
+            />
+            {hasDateFilter && (
+              <button
+                onClick={clearDateFilter}
+                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium px-2.5 py-1 rounded-full border border-red-200 hover:bg-red-50 transition-colors"
+              >
+                <X size={11} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Active filter summary */}
+        {hasDateFilter && (
+          <div className="mt-3 pt-3 border-t border-brand/10 flex items-center gap-2">
+            <span className="text-xs text-slate-400">Showing:</span>
+            <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-medium">
+              {DATE_FIELDS_MAP[dateField] || dateField}
+              {dateFrom && dateTo && dateFrom === dateTo && ` = ${fmtDate(dateFrom)}`}
+              {dateFrom && (!dateTo || dateTo !== dateFrom) && ` from ${fmtDate(dateFrom)}`}
+              {dateTo   && (!dateFrom || dateTo !== dateFrom) && ` to ${fmtDate(dateTo)}`}
+            </span>
+            <span className="text-xs text-slate-400">{total} result{total !== 1 ? 's' : ''}</span>
+          </div>
         )}
       </div>
 
