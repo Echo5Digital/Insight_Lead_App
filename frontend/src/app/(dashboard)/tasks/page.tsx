@@ -114,87 +114,61 @@ export default function TasksPage() {
         </button>
       </div>
 
-      {/* Advanced Date Filter */}
+      {/* Date Filter */}
       <div className={cn(
         'bg-white rounded-xl p-4 mb-5 shadow-sm border transition-colors',
         hasDateFilter ? 'border-brand/30 bg-brand/[0.02]' : 'border-slate-100'
       )}>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          {/* Header */}
-          <div className="flex items-center gap-1.5">
+        {/* Row 1: label + presets */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 mr-1">
             <CalendarDays size={14} className={cn(hasDateFilter ? 'text-brand' : 'text-slate-400')} />
             <span className={cn('text-xs font-semibold', hasDateFilter ? 'text-brand' : 'text-slate-500')}>
-              Date Filter
+              Filter by date
             </span>
           </div>
-
-          {/* Explanation */}
-          <span className="text-xs text-slate-400 hidden sm:block">
-            Filters each panel by its trigger date (Forms Sent / Intake Appt / Test Appt)
-          </span>
-
-          {/* Preset buttons */}
-          <div className="flex flex-wrap gap-1.5">
-            {DATE_PRESETS.map(p => (
-              <button
-                key={p.key}
-                onClick={() => applyPreset(p.key)}
-                className={cn(
-                  'text-xs px-2.5 py-1 rounded-full border font-medium transition-all',
-                  datePreset === p.key
-                    ? 'bg-brand text-white border-brand shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand'
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom range inputs */}
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <span className="text-xs text-slate-400 font-medium">From</span>
-            <input
-              type="date"
-              className="input-base text-xs w-36"
-              value={dateFrom}
-              onChange={e => { setDateFrom(e.target.value); setDatePreset(''); }}
-            />
-            <span className="text-xs text-slate-400 font-medium">To</span>
-            <input
-              type="date"
-              className="input-base text-xs w-36"
-              value={dateTo}
-              onChange={e => { setDateTo(e.target.value); setDatePreset(''); }}
-            />
+          {DATE_PRESETS.map(p => (
             <button
-              onClick={() => load()}
-              className="btn-primary text-xs px-3 py-1.5"
+              key={p.key}
+              onClick={() => applyPreset(p.key)}
+              className={cn(
+                'text-xs px-2.5 py-1 rounded-full border font-medium transition-all',
+                datePreset === p.key
+                  ? 'bg-brand text-white border-brand shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand'
+              )}
             >
-              Apply
+              {p.label}
             </button>
-            {hasDateFilter && (
-              <button
-                onClick={clearDateFilter}
-                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium px-2.5 py-1 rounded-full border border-red-200 hover:bg-red-50 transition-colors"
-              >
-                <X size={11} /> Clear
-              </button>
-            )}
-          </div>
+          ))}
         </div>
 
-        {/* Active filter summary */}
-        {hasDateFilter && (
-          <div className="mt-3 pt-3 border-t border-brand/10 flex items-center gap-2">
-            <span className="text-xs text-slate-400">Showing tasks where trigger date is:</span>
-            <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-medium">
-              {dateFrom && dateTo && dateFrom === dateTo && fmtDate(dateFrom)}
-              {dateFrom && (!dateTo || dateTo !== dateFrom) && `from ${fmtDate(dateFrom)}`}
-              {dateTo   && (!dateFrom || dateTo !== dateFrom) && ` to ${fmtDate(dateTo)}`}
-            </span>
-          </div>
-        )}
+        {/* Row 2: custom range */}
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-xs text-slate-400 font-medium">From</span>
+          <input
+            type="date"
+            className="input-base text-xs w-36"
+            value={dateFrom}
+            onChange={e => { setDateFrom(e.target.value); setDatePreset(''); }}
+          />
+          <span className="text-xs text-slate-400 font-medium">To</span>
+          <input
+            type="date"
+            className="input-base text-xs w-36"
+            value={dateTo}
+            onChange={e => { setDateTo(e.target.value); setDatePreset(''); }}
+          />
+          <button onClick={() => load()} className="btn-primary text-xs px-3 py-1.5">Apply</button>
+          {hasDateFilter && (
+            <button
+              onClick={clearDateFilter}
+              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium px-2.5 py-1 rounded-full border border-red-200 hover:bg-red-50 transition-colors"
+            >
+              <X size={11} /> Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
