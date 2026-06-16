@@ -11,7 +11,7 @@ import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, RefreshCw, UserPlus, Trash2, Edit2, Eye } from 'lucide-react';
+import { Plus, Search, RefreshCw, UserPlus, Trash2, Edit2 } from 'lucide-react';
 import type { Lead, Settings } from '@/types';
 
 const LEAD_STATUSES = ['New','Contact 1','Contact 2','Contact 3','No Response','Converted','Not Moving Forward'];
@@ -203,7 +203,7 @@ export default function LeadsPage() {
                       <div className="font-medium text-slate-900 hover:text-brand">{lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—'}</div>
                       <div className="text-xs text-slate-400">{lead.email || ''}</div>
                     </td>
-                    <td className="table-td text-slate-600">{lead.phone || '—'}</td>
+                    <td className="table-td text-slate-600">{lead.phone ? formatPhone(lead.phone) : '—'}</td>
                     <td className="table-td text-slate-600">{lead.insurance || '—'}</td>
                     <td className="table-td text-slate-600">{lead.referralSource || lead.source || '—'}</td>
                     <td className="table-td text-slate-500 text-xs">{fmtDate(lead.createdAt)}</td>
@@ -290,7 +290,7 @@ export default function LeadsPage() {
                 {/* Info grid */}
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                   {[
-                    ['Phone',           viewLead.phone],
+                    ['Phone',           viewLead.phone ? formatPhone(viewLead.phone) : undefined],
                     ['Insurance',       viewLead.insurance],
                     ['Referral Source', viewLead.referralSource || viewLead.source],
                     ['Status',          viewLead.status],
