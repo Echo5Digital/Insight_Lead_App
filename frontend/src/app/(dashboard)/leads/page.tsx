@@ -11,7 +11,7 @@ import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, RefreshCw, UserPlus, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Search, RefreshCw, UserPlus, Trash2, Edit2, Eye } from 'lucide-react';
 import type { Lead, Settings } from '@/types';
 
 const LEAD_STATUSES = ['New','Contact 1','Contact 2','Contact 3','No Response','Converted','Not Moving Forward'];
@@ -36,6 +36,7 @@ export default function LeadsPage() {
   const [hideArchived, setHideArchived] = useState(true);
 
   // Modals
+  const [viewLead,    setViewLead]    = useState<Lead | null>(null);
   const [editLead,    setEditLead]    = useState<Lead | null>(null);
   const [convertLead, setConvertLead] = useState<Lead | null>(null);
   const [deleteLead,  setDeleteLead]  = useState<Lead | null>(null);
@@ -196,7 +197,7 @@ export default function LeadsPage() {
                 )}
                 {leads.map(lead => (
                   <tr key={lead._id}
-                    onClick={() => { setEditLead(lead); setEditData({ name: lead.name, email: lead.email, phone: lead.phone, insurance: lead.insurance, referralSource: lead.referralSource, notes: lead.notes }); }}
+                    onClick={() => setViewLead(lead)}
                     className={cn('transition-colors cursor-pointer', rowColor(lead))}>
                     <td className="table-td">
                       <div className="font-medium text-slate-900 hover:text-brand">{lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '—'}</div>
@@ -222,7 +223,7 @@ export default function LeadsPage() {
                         {canWrite && !lead.convertedToPatient && (
                           <>
                             <button onClick={() => { setEditLead(lead); setEditData({ name: lead.name, email: lead.email, phone: lead.phone, insurance: lead.insurance, referralSource: lead.referralSource, notes: lead.notes }); }}
-                              className="p-1.5 text-slate-400 hover:text-brand hover:bg-brand/10 rounded-lg transition-colors" title="Edit">
+                              className="p-1.5 text-slate-400 hover:text-brand hover:bg-brand/10 rounded-lg transition-colors" title="Edit lead">
                               <Edit2 size={13} />
                             </button>
                             <button onClick={() => { setConvertLead(lead); setConvertData({ insurance: lead.insurance || '', referralSource: lead.referralSource || '', category: 'Standard', notes: '' }); }}
@@ -252,8 +253,95 @@ export default function LeadsPage() {
         <Pagination page={page} pages={pages} total={total} limit={25} onChange={setPage} />
       </div>
 
+      {/* View Lead Modal */}
+      {(() => {
+        const SKIP_KEYS = new Set(['first_name','last_name','name','email','phone','mobile','notes','message','comment','interest','utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','referrer','form_id','source','city']);
+        const skipKey = (k: string) => {
+          const l = k.toLowerCase();
+          return SKIP_KEYS.has(l) ||
+            l.includes('nonce') || l.includes('action') ||
+            l === 'metform_id' || l.endsWith('_id') ||
+            l.endsWith('_name') || l.endsWith('_email') ||
+            l.endsWith('_telephone') || l.endsWith('_phone') || l.endsWith('_mobile');
+        };
+        const prettify = (k: string) => k
+          .replace(/^metform_mf_/i,'').replace(/^metform_/i,'').replace(/^mf[-_]/i,'')
+          .replace(/[-_]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+        const extras = Object.entries(viewLead?.originalPayload || {}).filter(([k, v]) => !skipKey(k) && v !== '' && v != null);
+        return (
+          <Modal open={!!viewLead} onClose={() => setViewLead(null)} title="Lead Details" size="lg">
+            {viewLead && (
+              <div className="space-y-4">
+                {/* Header row with Edit button */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{viewLead.name || `${viewLead.firstName || ''} ${viewLead.lastName || ''}`.trim() || '—'}</p>
+                    <p className="text-sm text-slate-500">{viewLead.email || ''}</p>
+                  </div>
+                  {canWrite && !viewLead.convertedToPatient && (
+                    <button
+                      onClick={() => { setViewLead(null); setEditLead(viewLead); setEditData({ name: viewLead.name, email: viewLead.email, phone: viewLead.phone, insurance: viewLead.insurance, referralSource: viewLead.referralSource, notes: viewLead.notes }); }}
+                      className="btn-secondary flex items-center gap-2 text-sm">
+                      <Edit2 size={14} /> Edit Lead
+                    </button>
+                  )}
+                </div>
+                <div className="border-t border-slate-100" />
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                  {[
+                    ['Phone',           viewLead.phone],
+                    ['Insurance',       viewLead.insurance],
+                    ['Referral Source', viewLead.referralSource || viewLead.source],
+                    ['Status',          viewLead.status],
+                    ['Received',        fmtDate(viewLead.createdAt)],
+                    ['Days Since',      `${daysSince(viewLead.createdAt)} days`],
+                  ].map(([label, val]) => val ? (
+                    <div key={label as string} className="flex flex-col gap-0.5">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</span>
+                      <span className="text-slate-800">{val}</span>
+                    </div>
+                  ) : null)}
+                </div>
+                {viewLead.notes && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Notes</p>
+                    <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{viewLead.notes}</p>
+                  </div>
+                )}
+                {extras.length > 0 && (
+                  <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Form Submission Details</p>
+                    {extras.map(([k, v]) => (
+                      <div key={k} className="flex gap-2 text-sm">
+                        <span className="text-slate-500 w-44 shrink-0">{prettify(k)}</span>
+                        <span className="text-slate-800 font-medium break-words">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-3 justify-end pt-1">
+                  {canWrite && !viewLead.convertedToPatient && (
+                    <button onClick={() => { setViewLead(null); setConvertLead(viewLead); setConvertData({ insurance: viewLead.insurance || '', referralSource: viewLead.referralSource || '', category: 'Standard', notes: '' }); }}
+                      className="btn-secondary flex items-center gap-2 text-sm">
+                      <UserPlus size={14} /> Convert to Patient
+                    </button>
+                  )}
+                  {viewLead.convertedToPatient && (
+                    <button onClick={() => router.push(`/patients/${viewLead.patientId}`)} className="btn-primary text-sm">
+                      View Patient
+                    </button>
+                  )}
+                  <button onClick={() => setViewLead(null)} className="btn-secondary">Close</button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
+
       {/* Edit Modal */}
-      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Edit Lead" size="md">
+      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Edit Lead" size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Name"><Input value={editData.name || ''} onChange={e => setEditData(p => ({...p, name: e.target.value}))} /></Field>

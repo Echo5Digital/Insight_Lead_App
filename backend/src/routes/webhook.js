@@ -46,10 +46,11 @@ module.exports = async function webhookLeads(req, res) {
     if (!tenantId) return res.status(400).json({ success: false, error: 'Cannot identify tenant' });
 
     const body  = req.body || {};
-    const email = (body.email || '').toLowerCase().trim();
-    const phone = (body.phone || '').trim();
+    // Support both standard fields and MetForm's prefixed field names
+    const email = (body.email || body.metform_mf_email || '').toLowerCase().trim();
+    const phone = (body.phone || body.metform_mf_telephone || body.metform_mf_phone || '').trim();
     const name  = [body.first_name, body.last_name].filter(Boolean).join(' ').trim() ||
-                  body.name || '';
+                  body.name || body.metform_mf_full_name || '';
 
     const leadDoc = {
       tenantId,
