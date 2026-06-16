@@ -27,8 +27,9 @@ export default function SettingsPage() {
   const [newInsurance,  setNewInsurance]  = useState('');
   const [newReferral,   setNewReferral]   = useState('');
   const [newStatus,     setNewStatus]     = useState('');
-  const [newDoctor,     setNewDoctor]     = useState('');
-  const [newPsych,      setNewPsych]      = useState('');
+  const [newDoctor,       setNewDoctor]       = useState('');
+  const [newPsych,        setNewPsych]        = useState('');
+  const [newNotifyEmail,  setNewNotifyEmail]  = useState('');
   const [localSettings, setLocalSettings] = useState<Settings | null>(null);
 
   // New user modal
@@ -270,6 +271,94 @@ export default function SettingsPage() {
         </div>
         <button onClick={handleSaveLists} disabled={saving} className="btn-primary mt-3 flex items-center gap-2 text-sm">
           <Save size={13} />Save Lists
+        </button>
+      </div>
+
+      {/* Lead Notification Recipients */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <h3 className="section-title mb-1">New Lead Email Notifications</h3>
+        <p className="text-sm text-slate-500 mb-4">Select which users receive an email when a new website lead comes in.</p>
+        <div className="space-y-2 mb-4">
+          {users.filter(u => u.active).map(u => {
+            const checked = (localSettings?.notifyEmails || []).includes(u.email);
+            return (
+              <label key={u._id} className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    setLocalSettings(s => {
+                      if (!s) return s;
+                      const list = s.notifyEmails || [];
+                      return {
+                        ...s,
+                        notifyEmails: checked ? list.filter(e => e !== u.email) : [...list, u.email],
+                      };
+                    });
+                  }}
+                  className="w-4 h-4 rounded border-slate-300 accent-brand"
+                />
+                <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{u.name}</span>
+                <span className="text-xs text-slate-400">{u.email}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>{u.role}</span>
+              </label>
+            );
+          })}
+          {users.filter(u => u.active).length === 0 && (
+            <p className="text-sm text-slate-400">No active users found.</p>
+          )}
+        </div>
+
+        {/* Manual email entries (not in user list) */}
+        {(localSettings?.notifyEmails || []).filter(e => !users.some(u => u.email === e)).map(e => (
+          <div key={e} className="flex items-center gap-2 mb-1">
+            <span className="text-sm text-slate-700 bg-slate-100 px-3 py-1 rounded-full">{e}</span>
+            <button onClick={() => setLocalSettings(s => s ? { ...s, notifyEmails: (s.notifyEmails || []).filter(x => x !== e) } : s)}
+              className="text-slate-400 hover:text-red-500 transition-colors"><X size={13} /></button>
+          </div>
+        ))}
+
+        {/* Add external email manually */}
+        <div className="flex gap-2 mt-3">
+          <input
+            type="email"
+            className="input-base flex-1 text-sm"
+            placeholder="Add email address manually…"
+            value={newNotifyEmail}
+            onChange={e => setNewNotifyEmail(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                const val = newNotifyEmail.trim().toLowerCase();
+                if (val && !(localSettings?.notifyEmails || []).includes(val)) {
+                  setLocalSettings(s => s ? { ...s, notifyEmails: [...(s.notifyEmails || []), val] } : s);
+                }
+                setNewNotifyEmail('');
+              }
+            }}
+          />
+          <button
+            onClick={() => {
+              const val = newNotifyEmail.trim().toLowerCase();
+              if (val && !(localSettings?.notifyEmails || []).includes(val)) {
+                setLocalSettings(s => s ? { ...s, notifyEmails: [...(s.notifyEmails || []), val] } : s);
+              }
+              setNewNotifyEmail('');
+            }}
+            className="btn-secondary px-3"><Plus size={14} /></button>
+        </div>
+
+        <button
+          onClick={async () => {
+            setSaving(true);
+            try {
+              await api.put('/settings', { notifyEmails: localSettings?.notifyEmails || [] });
+              toast.success('Notification settings saved');
+            } catch { toast.error('Save failed'); }
+            finally { setSaving(false); }
+          }}
+          disabled={saving}
+          className="btn-primary mt-3 flex items-center gap-2 text-sm">
+          <Save size={13} />Save Notification Settings
         </button>
       </div>
 

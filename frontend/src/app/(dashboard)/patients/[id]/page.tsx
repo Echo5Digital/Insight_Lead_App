@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { fmtDate, toInputDate, fmtCurrency, timeAgo, cn } from '@/lib/utils';
+import { fmtDate, toInputDate, fmtCurrency, timeAgo, cn, formatPhone } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { Select, Input, Textarea } from '@/components/ui/FormField';
@@ -48,6 +48,9 @@ export default function PatientDetailPage() {
   const [milestoneDirty, setMilestoneDirty] = useState(false);
   const [milestoneSaving,setMilestoneSaving]= useState(false);
   const milestoneDirtyRef = useRef(false);
+  const [contactNote,    setContactNote]    = useState('');
+  const [contactLogging, setContactLogging] = useState(false);
+  const [showContactForm,setShowContactForm]= useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,9 +102,25 @@ export default function PatientDetailPage() {
     milestoneDirtyRef.current = false;
   };
 
+  const handleLogContact = async () => {
+    setContactLogging(true);
+    try {
+      await api.post(`/patients/${id}/contact`, { note: contactNote });
+      toast.success('Contact attempt logged');
+      setContactNote('');
+      setShowContactForm(false);
+      load();
+    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Error'); }
+    finally { setContactLogging(false); }
+  };
+
   const f = (key: keyof Patient) => editing
     ? <input className="input-base py-1.5 text-sm" value={form[key] as string ?? ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
     : <span className="text-sm text-slate-700">{String(patient?.[key] ?? '—')}</span>;
+
+  const phoneF = () => editing
+    ? <input className="input-base py-1.5 text-sm" placeholder="405-555-9999" value={form.phone as string ?? ''} onChange={e => setForm(p => ({ ...p, phone: formatPhone(e.target.value) }))} />
+    : <span className="text-sm text-slate-700">{String(patient?.phone ?? '—')}</span>;
 
   const dateF = (key: MilestoneKey | keyof Patient) => editing
     ? <input type="date" className="input-base py-1.5 text-sm" value={toInputDate(form[key as keyof Patient] as string)} onChange={e => setForm(p => ({ ...p, [key]: e.target.value || null }))} />
@@ -240,7 +259,7 @@ export default function PatientDetailPage() {
               {editing ? <Input className="py-1.5 text-sm" value={form.name || ''} onChange={e => setForm(p => ({...p, name: e.target.value}))} /> : <span className="text-sm text-slate-700">{patient.name}</span>}
             </Row>
             <Row label="Guardian Name">{f('guardianName')}</Row>
-            <Row label="Phone">{f('phone')}</Row>
+            <Row label="Phone">{phoneF()}</Row>
             <Row label="Email">{f('email')}</Row>
             <Row label="DOB">{dateF('dob')}</Row>
             <Row label="Status">
@@ -292,10 +311,8 @@ export default function PatientDetailPage() {
             <Row label="Co-Pay">{numF('copay')}</Row>
             <Row label="Intake Paid">{numF('intakePaid')}</Row>
             <Row label="Testing Paid">{numF('testingPaid')}</Row>
+            <Row label="Feedback Paid">{numF('feedbackPaid')}</Row>
             <Row label="Balance">{numF('balance')}</Row>
-            <Row label="Intake PD">{numF('intakePD')}</Row>
-            <Row label="Test PD">{numF('testPD')}</Row>
-            <Row label="Feedback PD">{numF('feedbackPD')}</Row>
           </Section>
 
           {/* Notes */}
@@ -420,6 +437,52 @@ export default function PatientDetailPage() {
                 }
               </Row>
             </div>
+          </Section>
+
+          {/* Contact Attempts */}
+          <Section title={`Contact Attempts${patient.contactAttempts?.length ? ` (${patient.contactAttempts.length})` : ''}`}>
+            {canWrite && (
+              <div className="mb-3">
+                {!showContactForm
+                  ? <button onClick={() => setShowContactForm(true)}
+                      className="btn-secondary text-sm flex items-center gap-2">
+                      <Plus size={13} /> Log Contact Attempt
+                    </button>
+                  : <div className="space-y-2">
+                      <textarea
+                        className="input-base text-sm w-full resize-none"
+                        rows={2}
+                        placeholder="Optional note (e.g. Left voicemail, no answer…)"
+                        value={contactNote}
+                        onChange={e => setContactNote(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleLogContact(); } }}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={handleLogContact} disabled={contactLogging}
+                          className="btn-primary text-sm flex items-center gap-1.5">
+                          <Plus size={12} />{contactLogging ? 'Logging…' : 'Log Attempt'}
+                        </button>
+                        <button onClick={() => { setShowContactForm(false); setContactNote(''); }}
+                          className="btn-secondary text-sm">Cancel</button>
+                      </div>
+                    </div>
+                }
+              </div>
+            )}
+            {!patient.contactAttempts?.length
+              ? <p className="text-sm text-slate-400">No contact attempts logged yet.</p>
+              : <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+                  {[...(patient.contactAttempts)].reverse().map((attempt, i) => (
+                    <div key={i} className="flex items-start justify-between text-sm border-b border-slate-50 pb-2">
+                      <div>
+                        <span className="text-xs font-semibold text-brand">Attempt #{patient.contactAttempts!.length - i}</span>
+                        {attempt.note && <p className="text-xs text-slate-600 mt-0.5">{attempt.note}</p>}
+                      </div>
+                      <span className="text-xs text-slate-400 whitespace-nowrap ml-3">{timeAgo(attempt.date)}</span>
+                    </div>
+                  ))}
+                </div>
+            }
           </Section>
 
           {/* Audit Log */}

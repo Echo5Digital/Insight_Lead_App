@@ -47,7 +47,7 @@ function computeFields(doc) {
 }
 
 const DATE_FIELDS   = ['dob','referralDate','referralRecDate','formsSent','formsRec','preAuthSent','preAuthRec','gfeSent','gfeRec','intakeAppt','testAppt','feedbackAppt','appealsSentClient','appealsRecClient','appealsSentBilling','appealsRecBilling'];
-const NUMBER_FIELDS = ['copay','intakePaid','testingPaid','balance','intakePD','testPD','feedbackPD'];
+const NUMBER_FIELDS = ['copay','intakePaid','testingPaid','feedbackPaid','balance','intakePD','testPD','feedbackPD'];
 const STRING_FIELDS = ['name','phone','email','insurance','referralSource','category','status','notes','doctor','psych','guardianName','appealsOutcome'];
 const BOOL_FIELDS   = ['rePreAuthIntake','rePreAuthTest','rePreAuthFeedback'];
 
@@ -136,8 +136,8 @@ async function exportCsv(req, res) {
 
     const headers = ['Patient ID','Name','Phone','Email','DOB','Insurance','Referral Source','Category','Status',
       'Referral Date','Forms Sent','Forms Rec','Pre-Auth Sent','Pre-Auth Rec','GFE Sent','GFE Rec',
-      'Intake Appt','Test Appt','Feedback Appt','Co-Pay','Intake Paid','Testing Paid','Balance',
-      'Intake PD','Test PD','Feedback PD','Intake→Test Days','Test→Feedback Days','Intake→Feedback Days','Notes'];
+      'Intake Appt','Test Appt','Feedback Appt','Co-Pay','Intake Paid','Testing Paid','Feedback Paid','Balance',
+      'Intake→Test Days','Test→Feedback Days','Intake→Feedback Days','Notes'];
 
     const d = (v) => v ? new Date(v).toLocaleDateString('en-US') : '';
     const n = (v) => (v != null) ? v : '';
@@ -148,8 +148,7 @@ async function exportCsv(req, res) {
       s(p.category), s(p.status), d(p.referralDate), d(p.formsSent), d(p.formsRec),
       d(p.preAuthSent), d(p.preAuthRec), d(p.gfeSent), d(p.gfeRec),
       d(p.intakeAppt), d(p.testAppt), d(p.feedbackAppt),
-      n(p.copay), n(p.intakePaid), n(p.testingPaid), n(p.balance),
-      n(p.intakePD), n(p.testPD), n(p.feedbackPD),
+      n(p.copay), n(p.intakePaid), n(p.testingPaid), n(p.feedbackPaid), n(p.balance),
       n(p.intakeToTestDays), n(p.testToFeedbackDays), n(p.intakeToFeedbackDays), s(p.notes),
     ].join(','));
 
@@ -223,6 +222,11 @@ async function updatePatient(req, res) {
 
     const { set, unset } = buildUpdate(req.body);
 
+    // Auto-complete: first time feedbackAppt is set, auto-advance status to Complete
+    if (req.body.feedbackAppt && !old?.feedbackAppt && !req.body.status) {
+      set.status = 'Complete';
+    }
+
     // Build changed-fields audit before encrypting (use decrypted old values for readability)
     const decryptedOld = decryptPatient(old);
     const changedFields = Object.keys(set)
@@ -252,6 +256,33 @@ async function updatePatient(req, res) {
     res.json({ message: 'Updated' });
   } catch (err) {
     console.error('[update-patient]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// POST /api/patients/:id/contact
+async function logContactAttempt(req, res) {
+  try {
+    const db       = await getDb();
+    const tenantId = req.user.tenantId;
+    const note     = (req.body.note || '').trim();
+    const attempt  = { date: new Date(), ...(note && { note }) };
+
+    const result = await db.collection('patients').updateOne(
+      { _id: new ObjectId(req.params.id), tenantId },
+      { $push: { contactAttempts: attempt }, $set: { updatedAt: new Date() } }
+    );
+    if (!result.matchedCount) return res.status(404).json({ error: 'Not found' });
+
+    await writeAudit({
+      tenantId, userId: req.user.userId, userName: req.user.name || req.user.email,
+      email: req.user.email, entityType: 'patient', entityId: req.params.id,
+      action: 'contact_attempt',
+      changedFields: [{ field: 'contactAttempt', newValue: note || '(no note)' }],
+    });
+    res.json({ message: 'Contact attempt logged' });
+  } catch (err) {
+    console.error('[contact-attempt]', err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -293,5 +324,5 @@ async function bulkDeletePatients(req, res) {
 
 module.exports = {
   getPatients, getPatient, createPatient, updatePatient, deletePatient,
-  bulkDeletePatients, exportCsv, requireAuth, requireRole,
+  bulkDeletePatients, exportCsv, logContactAttempt, requireAuth, requireRole,
 };

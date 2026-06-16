@@ -331,6 +331,10 @@ function PatientsInner() {
           <option value="Standard">Standard</option>
           <option value="Pain Management">Pain Management</option>
         </select>
+        <select className="input-base w-44 text-sm" value={source} onChange={e => { setSource(e.target.value); setPage(1); }}>
+          <option value="">All referral sources</option>
+          {(settings?.referralSourceList || []).map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <select className="input-base w-44 text-sm" value={needsName ? 'yes' : ''}
           onChange={e => { setNeedsName(e.target.value === 'yes'); setPage(1); }}>
           <option value="">All patients</option>

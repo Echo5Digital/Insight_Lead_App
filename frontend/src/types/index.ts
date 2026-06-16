@@ -56,6 +56,7 @@ export interface Patient {
   copay?: number;
   intakePaid?: number;
   testingPaid?: number;
+  feedbackPaid?: number;
   balance?: number;
   intakePD?: number;
   testPD?: number;
@@ -75,6 +76,8 @@ export interface Patient {
   psych?: string;
   // Guardian
   guardianName?: string;
+  // Contact attempts
+  contactAttempts?: { date: string; note?: string }[];
   // Flag: imported without name, needs update
   needsName?: boolean;
   excelRow?: number;
@@ -112,6 +115,7 @@ export interface Settings {
   referralSourceList: string[];
   doctorList: string[];
   psychList: string[];
+  notifyEmails: string[];
 }
 
 export interface DashboardStats {

@@ -9,7 +9,7 @@ const ingestLead    = require('./src/routes/ingest-lead');
 const webhookLeads  = require('./src/routes/webhook');
 const { login, logout, getMe }                          = require('./src/routes/auth');
 const { getLeads, getLead, createLead, updateLead, convertLead, deleteLead } = require('./src/routes/leads');
-const { getPatients, getPatient, createPatient, updatePatient, deletePatient, bulkDeletePatients, exportCsv } = require('./src/routes/patients');
+const { getPatients, getPatient, createPatient, updatePatient, deletePatient, bulkDeletePatients, exportCsv, logContactAttempt } = require('./src/routes/patients');
 const { getStats, getReferrals, getProcess, getAppointments, getTasks, getNewPatients, getFormsStats, getStatusBreakdown, getOutstandingAppeals, getStatusTimeSeries } = require('./src/routes/dashboard');
 const { fetchSettings, saveSettings }   = require('./src/routes/settings');
 const { getUsers, createUser, updateUser } = require('./src/routes/users');
@@ -69,9 +69,10 @@ app.get('/api/patients/export/csv',  requireAuth, requireRole('admin'),         
 app.delete('/api/patients/bulk',     requireAuth, requireRole('admin'),            bulkDeletePatients);
 app.get('/api/patients',             requireAuth,                                  getPatients);
 app.post('/api/patients',            requireAuth, requireRole(['admin','staff']),   createPatient);
-app.get('/api/patients/:id',         requireAuth,                                  getPatient);
-app.put('/api/patients/:id',         requireAuth, requireRole(['admin','staff']),   updatePatient);
-app.delete('/api/patients/:id',      requireAuth, requireRole('admin'),             deletePatient);
+app.get('/api/patients/:id',          requireAuth,                                  getPatient);
+app.put('/api/patients/:id',          requireAuth, requireRole(['admin','staff']),   updatePatient);
+app.post('/api/patients/:id/contact', requireAuth, requireRole(['admin','staff']),   logContactAttempt);
+app.delete('/api/patients/:id',       requireAuth, requireRole('admin'),             deletePatient);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 app.get('/api/dashboard/stats',            requireAuth, getStats);

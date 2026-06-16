@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Field, Select, Input, Textarea } from '@/components/ui/FormField';
-import { cn } from '@/lib/utils';
+import { cn, formatPhone } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ArrowRight, CheckCircle, User, Calendar, DollarSign, Plus, X } from 'lucide-react';
@@ -177,7 +177,7 @@ function NewPatientForm() {
               <Field label="Guardian Name" className="col-span-2">
                 <Input value={g('guardianName')} onChange={e => set('guardianName', e.target.value)} placeholder="Guardian / parent name (if applicable)" />
               </Field>
-              <Field label="Phone"><Input value={g('phone')} onChange={e => set('phone', e.target.value)} placeholder="405-000-0000" /></Field>
+              <Field label="Phone"><Input value={g('phone')} onChange={e => set('phone', formatPhone(e.target.value))} placeholder="405-555-9999" /></Field>
               <Field label="Date of Birth"><Input type="date" value={g('dob')} onChange={e => set('dob', e.target.value)} /></Field>
               <Field label="Email" className="col-span-2"><Input type="email" value={g('email')} onChange={e => set('email', e.target.value)} /></Field>
               <Field label="Insurance">
@@ -302,10 +302,8 @@ function NewPatientForm() {
                 ['Co-Pay',        'copay'],
                 ['Intake Paid',   'intakePaid'],
                 ['Testing Paid',  'testingPaid'],
+                ['Feedback Paid', 'feedbackPaid'],
                 ['Balance',       'balance'],
-                ['Intake PD',     'intakePD'],
-                ['Test PD',       'testPD'],
-                ['Feedback PD',   'feedbackPD'],
               ].map(([label, key]) => (
                 <Field key={key} label={label}>
                   <Input type="number" step="0.01" placeholder="0.00" value={g(key)} onChange={e => set(key, e.target.value)} />

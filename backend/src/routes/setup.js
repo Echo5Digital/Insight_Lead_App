@@ -70,7 +70,7 @@ module.exports = async function setup(req, res) {
       { $setOnInsert: {
         tenantId,
         appointmentDays: { intake: 7, test: 7, feedback: 7, gfeLookback: 100, outstandingLookback: 90 },
-        statusList:      ['In Progress', 'Complete', 'Not Moving Forward', 'On Hold', 'Denied', 'No Response'],
+        statusList:      ['In Progress', 'Contact 1', 'Contact 2', 'Contact 3', 'Complete', 'Not Moving Forward', 'On Hold', 'Denied', 'No Response'],
         insuranceList: [
           'Aetna','Aetna Better','Ambetter','BCBS','BCBS/Medicaid','BCBS/SoonerCare',
           'BlueLinc','Cash Pay','Cigna','Healthcare Hwy','Healthchoice','Humana',
