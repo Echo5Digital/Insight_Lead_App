@@ -263,6 +263,23 @@ export default function LeadsPage() {
             <Field label="Referral Source" className="col-span-2"><Select options={settings?.referralSourceList || []} placeholder="Select…" value={editData.referralSource || ''} onChange={e => setEditData(p => ({...p, referralSource: e.target.value}))} /></Field>
           </div>
           <Field label="Notes"><Textarea rows={3} value={editData.notes || ''} onChange={e => setEditData(p => ({...p, notes: e.target.value}))} /></Field>
+          {/* Extra fields from the web form submission */}
+          {(() => {
+            const SKIP = new Set(['first_name','last_name','name','email','phone','mobile','notes','message','comment','interest','utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','referrer','form_id','source','city']);
+            const extras = Object.entries(editLead?.originalPayload || {}).filter(([k, v]) => !SKIP.has(k.toLowerCase()) && v !== '' && v != null);
+            if (!extras.length) return null;
+            return (
+              <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Form Submission Details</p>
+                {extras.map(([k, v]) => (
+                  <div key={k} className="flex gap-2 text-sm">
+                    <span className="text-slate-500 w-44 shrink-0">{k.replace(/^mf-/i,'').replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
+                    <span className="text-slate-800 font-medium">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <div className="flex gap-3 justify-end pt-2">
             <button onClick={() => setEditLead(null)} className="btn-secondary">Cancel</button>
             <button onClick={handleEdit} disabled={saving} className="btn-primary">{saving ? 'Saving…' : 'Save Changes'}</button>

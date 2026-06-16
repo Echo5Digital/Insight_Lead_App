@@ -24,6 +24,7 @@ export interface Lead {
   source?: string;
   convertedToPatient?: boolean;
   patientId?: string;
+  originalPayload?: Record<string, unknown>;
   createdAt: string;
   updatedAt?: string;
 }

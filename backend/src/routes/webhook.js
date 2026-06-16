@@ -85,7 +85,7 @@ module.exports = async function webhookLeads(req, res) {
     console.log(`[WEBHOOK] Lead created: ${name} <${email || phone}> tenant:${tenantId}`);
 
     // Fire-and-forget — never block the webhook response on email
-    sendNewLeadEmail({ tenantId, name, email, phone, source: 'WordPress' });
+    sendNewLeadEmail({ tenantId, name, email, phone, source: 'WordPress', originalPayload: body });
 
     return res.status(200).json({ success: true, leadId });
 

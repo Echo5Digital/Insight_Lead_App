@@ -33,7 +33,27 @@ function getTransport() {
  * Send a new web lead notification email.
  * Silently skips if SMTP env vars are not configured.
  */
-async function sendNewLeadEmail({ tenantId, name, email, phone, source }) {
+// Fields from originalPayload that are already shown in the standard rows — skip them
+const SKIP_PAYLOAD_KEYS = new Set([
+  'first_name','last_name','name','email','phone','mobile',
+  'notes','message','comment','interest',
+  'utm_source','utm_medium','utm_campaign','utm_term','utm_content',
+  'gclid','fbclid','referrer','form_id','source','city',
+]);
+
+function extraPayloadRows(payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  const rows = Object.entries(payload)
+    .filter(([k, v]) => !SKIP_PAYLOAD_KEYS.has(k.toLowerCase()) && v !== '' && v != null)
+    .map(([k, v]) => {
+      const label = k.replace(/^mf-/i, '').replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+      return `<tr><td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb">${label}</td><td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${v}</td></tr>`;
+    });
+  return rows.join('');
+}
+
+async function sendNewLeadEmail({ tenantId, name, email, phone, source, originalPayload }) {
   const transport = getTransport();
   if (!transport) {
     console.warn('[mailer] SMTP not configured — skipping notification email');
@@ -109,9 +129,10 @@ async function sendNewLeadEmail({ tenantId, name, email, phone, source }) {
                 <td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${displayPhone}</td>
               </tr>
               <tr>
-                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Referral Source</td>
-                <td style="padding:10px 16px;color:#111827;font-size:14px">${displaySource}</td>
+                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb">Referral Source</td>
+                <td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${displaySource}</td>
               </tr>
+              ${extraPayloadRows(originalPayload)}
             </table>
 
             <p style="margin:20px 0 4px;color:#6b7280;font-size:12px">Received on: ${now}</p>

@@ -87,7 +87,7 @@ module.exports = async function ingestLead(req, res) {
     console.log(`[LEAD] ${firstName} ${lastName} | formId:${lead.formId} | tenant:${tenantId}`);
 
     // Fire-and-forget — never block the response on email
-    sendNewLeadEmail({ tenantId, name: [firstName, lastName].filter(Boolean).join(' '), email, phone, source: lead.source });
+    sendNewLeadEmail({ tenantId, name: [firstName, lastName].filter(Boolean).join(' '), email, phone, source: lead.source, originalPayload: body });
 
     return res.status(201).json({ leadId, message: 'Lead received' });
 
