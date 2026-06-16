@@ -265,16 +265,28 @@ export default function LeadsPage() {
           <Field label="Notes"><Textarea rows={3} value={editData.notes || ''} onChange={e => setEditData(p => ({...p, notes: e.target.value}))} /></Field>
           {/* Extra fields from the web form submission */}
           {(() => {
-            const SKIP = new Set(['first_name','last_name','name','email','phone','mobile','notes','message','comment','interest','utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','referrer','form_id','source','city']);
-            const extras = Object.entries(editLead?.originalPayload || {}).filter(([k, v]) => !SKIP.has(k.toLowerCase()) && v !== '' && v != null);
+            const SKIP_KEYS = new Set(['first_name','last_name','name','email','phone','mobile','notes','message','comment','interest','utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','referrer','form_id','source','city']);
+            const skipKey = (k: string) => {
+              const l = k.toLowerCase();
+              return SKIP_KEYS.has(l) ||
+                l.includes('nonce') || l.includes('action') ||
+                l === 'metform_id' || l.endsWith('_id') ||
+                l.endsWith('_name') || l.endsWith('_email') ||
+                l.endsWith('_telephone') || l.endsWith('_phone') || l.endsWith('_mobile');
+            };
+            const prettify = (k: string) => k
+              .replace(/^metform_mf_/i,'').replace(/^metform_/i,'').replace(/^mf[-_]/i,'')
+              .replace(/[-_]/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+            const extras = Object.entries(editLead?.originalPayload || {})
+              .filter(([k, v]) => !skipKey(k) && v !== '' && v != null);
             if (!extras.length) return null;
             return (
               <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Form Submission Details</p>
                 {extras.map(([k, v]) => (
                   <div key={k} className="flex gap-2 text-sm">
-                    <span className="text-slate-500 w-44 shrink-0">{k.replace(/^mf-/i,'').replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
-                    <span className="text-slate-800 font-medium">{String(v)}</span>
+                    <span className="text-slate-500 w-44 shrink-0">{prettify(k)}</span>
+                    <span className="text-slate-800 font-medium break-words">{String(v)}</span>
                   </div>
                 ))}
               </div>

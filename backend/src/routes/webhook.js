@@ -60,7 +60,7 @@ module.exports = async function webhookLeads(req, res) {
       phone:        phone   || undefined,
       insurance:    (body.insurance   || '').trim() || undefined,
       referralSource: (body.referral_source || body.utm_source || '').trim() || undefined,
-      notes:        (body.notes       || '').trim() || undefined,
+      notes:        (body.notes || body.metform_mf_notes || body.metform_mf_message || '').trim() || undefined,
       source:       'WordPress',
       status:       'New',
       convertedToPatient: false,

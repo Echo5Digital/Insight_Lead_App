@@ -33,7 +33,7 @@ function getTransport() {
  * Send a new web lead notification email.
  * Silently skips if SMTP env vars are not configured.
  */
-// Fields from originalPayload that are already shown in the standard rows — skip them
+// Fields from originalPayload already shown in standard rows or internal to MetForm
 const SKIP_PAYLOAD_KEYS = new Set([
   'first_name','last_name','name','email','phone','mobile',
   'notes','message','comment','interest',
@@ -41,13 +41,23 @@ const SKIP_PAYLOAD_KEYS = new Set([
   'gclid','fbclid','referrer','form_id','source','city',
 ]);
 
+function shouldSkipPayloadKey(k) {
+  const l = k.toLowerCase();
+  return SKIP_PAYLOAD_KEYS.has(l) ||
+    l.includes('nonce') || l.includes('action') ||
+    l === 'metform_id' || l.endsWith('_id') ||
+    l.endsWith('_name') || l.endsWith('_email') ||
+    l.endsWith('_telephone') || l.endsWith('_phone') || l.endsWith('_mobile');
+}
+
 function extraPayloadRows(payload) {
   if (!payload || typeof payload !== 'object') return '';
   const rows = Object.entries(payload)
-    .filter(([k, v]) => !SKIP_PAYLOAD_KEYS.has(k.toLowerCase()) && v !== '' && v != null)
+    .filter(([k, v]) => !shouldSkipPayloadKey(k) && v !== '' && v != null)
     .map(([k, v]) => {
-      const label = k.replace(/^mf-/i, '').replace(/[-_]/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
+      const label = k
+        .replace(/^metform_mf_/i, '').replace(/^metform_/i, '').replace(/^mf[-_]/i, '')
+        .replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       return `<tr><td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb">${label}</td><td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${v}</td></tr>`;
     });
   return rows.join('');
