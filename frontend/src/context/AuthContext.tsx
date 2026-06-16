@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '@/types';
 
-// Auto-logout after 15 minutes of inactivity (HIPAA session control)
-const INACTIVITY_MS   = 15 * 60 * 1000; // 15 min
+// Auto-logout after 30 minutes of inactivity (HIPAA session control)
+const INACTIVITY_MS   = 30 * 60 * 1000; // 30 min
 const WARN_BEFORE_MS  =  1 * 60 * 1000; //  1 min warning
 
 interface AuthCtx {

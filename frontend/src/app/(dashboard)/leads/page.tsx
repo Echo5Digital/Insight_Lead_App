@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { fmtDate, cn } from '@/lib/utils';
+import { fmtDate, cn, formatPhone } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
@@ -258,7 +258,7 @@ export default function LeadsPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Name"><Input value={editData.name || ''} onChange={e => setEditData(p => ({...p, name: e.target.value}))} /></Field>
             <Field label="Email"><Input type="email" value={editData.email || ''} onChange={e => setEditData(p => ({...p, email: e.target.value}))} /></Field>
-            <Field label="Phone"><Input value={editData.phone || ''} onChange={e => setEditData(p => ({...p, phone: e.target.value}))} /></Field>
+            <Field label="Phone"><Input value={editData.phone || ''} onChange={e => setEditData(p => ({...p, phone: formatPhone(e.target.value)}))} placeholder="405-555-9999" /></Field>
             <Field label="Insurance"><Select options={settings?.insuranceList || []} placeholder="Select…" value={editData.insurance || ''} onChange={e => setEditData(p => ({...p, insurance: e.target.value}))} /></Field>
             <Field label="Referral Source" className="col-span-2"><Select options={settings?.referralSourceList || []} placeholder="Select…" value={editData.referralSource || ''} onChange={e => setEditData(p => ({...p, referralSource: e.target.value}))} /></Field>
           </div>
@@ -295,7 +295,7 @@ export default function LeadsPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Full Name" required><Input value={createData.name} onChange={e => setCreateData(p => ({...p, name: e.target.value}))} /></Field>
             <Field label="Email"><Input type="email" value={createData.email} onChange={e => setCreateData(p => ({...p, email: e.target.value}))} /></Field>
-            <Field label="Phone"><Input value={createData.phone} onChange={e => setCreateData(p => ({...p, phone: e.target.value}))} /></Field>
+            <Field label="Phone"><Input value={createData.phone} onChange={e => setCreateData(p => ({...p, phone: formatPhone(e.target.value)}))} placeholder="405-555-9999" /></Field>
             <Field label="Insurance"><Select options={settings?.insuranceList || []} placeholder="Select…" value={createData.insurance} onChange={e => setCreateData(p => ({...p, insurance: e.target.value}))} /></Field>
             <Field label="Referral Source" className="col-span-2"><Select options={settings?.referralSourceList || []} placeholder="Select…" value={createData.referralSource} onChange={e => setCreateData(p => ({...p, referralSource: e.target.value}))} /></Field>
           </div>

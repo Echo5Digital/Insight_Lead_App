@@ -6,14 +6,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Parse a stored date string as a local (not UTC) date to prevent the timezone
+// from shifting the day backwards. Dates stored as "2024-06-16T00:00:00.000Z"
+// would otherwise render as June 15 in negative-offset timezones (e.g. CDT).
+function parseLocalDate(val: string): Date {
+  const [y, m, d] = val.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export function fmtDate(val?: string | null): string {
   if (!val) return '—';
-  try { return format(new Date(val), 'MMM d, yyyy'); } catch { return '—'; }
+  try { return format(parseLocalDate(val), 'MMM d, yyyy'); } catch { return '—'; }
 }
 
 export function fmtDateShort(val?: string | null): string {
   if (!val) return '—';
-  try { return format(new Date(val), 'M/d/yy'); } catch { return '—'; }
+  try { return format(parseLocalDate(val), 'M/d/yy'); } catch { return '—'; }
 }
 
 export function timeAgo(val?: string | null): string {
@@ -23,7 +31,16 @@ export function timeAgo(val?: string | null): string {
 
 export function toInputDate(val?: string | null): string {
   if (!val) return '';
-  try { return format(new Date(val), 'yyyy-MM-dd'); } catch { return ''; }
+  // Slice the date portion directly — avoids UTC→local shift corrupting the day
+  return val.length >= 10 ? val.slice(0, 10) : '';
+}
+
+// Auto-format a phone number to XXX-XXX-XXXX as the user types
+export function formatPhone(val: string): string {
+  const digits = val.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export function fmtCurrency(val?: number | null): string {

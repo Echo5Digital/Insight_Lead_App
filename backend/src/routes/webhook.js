@@ -1,5 +1,6 @@
 const crypto  = require('crypto');
 const { getDb } = require('../lib/mongo');
+const { sendNewLeadEmail } = require('../lib/mailer');
 
 // POST /api/webhook/leads  — WordPress plugin sends here
 module.exports = async function webhookLeads(req, res) {
@@ -82,6 +83,9 @@ module.exports = async function webhookLeads(req, res) {
     const leadId = result.insertedId.toString();
 
     console.log(`[WEBHOOK] Lead created: ${name} <${email || phone}> tenant:${tenantId}`);
+
+    // Fire-and-forget — never block the webhook response on email
+    sendNewLeadEmail({ tenantId, name, email, phone, source: 'WordPress' });
 
     return res.status(200).json({ success: true, leadId });
 

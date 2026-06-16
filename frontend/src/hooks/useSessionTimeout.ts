@@ -3,8 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
-const TIMEOUT_MS      = 15 * 60 * 1000; // 15 minutes of inactivity → auto-logout
-const WARNING_MS      = 13 * 60 * 1000; // show warning at 13 min (2 min before)
+const TIMEOUT_MS      = 30 * 60 * 1000; // 30 minutes of inactivity → auto-logout
+const WARNING_MS      = 28 * 60 * 1000; // show warning at 28 min (2 min before)
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'] as const;
 
 export function useSessionTimeout() {

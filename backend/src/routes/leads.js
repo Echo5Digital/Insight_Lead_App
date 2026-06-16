@@ -10,8 +10,8 @@ function encryptLead(doc) {
   if (doc.name      != null) out.nameTokens      = nameSearchTokens(doc.name);
   if (doc.firstName != null) out.firstNameSearch = searchHash(doc.firstName);
   if (doc.lastName  != null) out.lastNameSearch  = searchHash(doc.lastName);
-  if (doc.email     != null) out.emailSearch     = searchHash(doc.email);
-  if (doc.phone     != null) out.phoneSearch     = searchHash(doc.phone);
+  if (doc.email)             out.emailSearch     = searchHash(doc.email);
+  if (doc.phone)             out.phoneSearch     = searchHash(doc.phone);
   return out;
 }
 
@@ -128,8 +128,10 @@ async function updateLead(req, res) {
     // Encrypt PHI fields before writing
     PHI_ENCRYPT.forEach(f => { if (set[f] != null) set[f] = encrypt(set[f]); });
     if (req.body.name      != null) set.nameTokens      = nameSearchTokens(req.body.name);
-    if (req.body.email     != null) set.emailSearch     = searchHash(req.body.email);
-    if (req.body.phone     != null) set.phoneSearch     = searchHash(req.body.phone);
+    if (req.body.email)             set.emailSearch     = searchHash(req.body.email);
+    else if (req.body.email === '') set.emailSearch     = null;
+    if (req.body.phone)             set.phoneSearch     = searchHash(req.body.phone);
+    else if (req.body.phone === '') set.phoneSearch     = null;
     if (req.body.insurance != null) set.insuranceSearch = searchHash(req.body.insurance);
 
     await db.collection('leads').updateOne({ _id: new ObjectId(req.params.id), tenantId }, { $set: set });

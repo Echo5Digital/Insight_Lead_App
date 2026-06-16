@@ -20,7 +20,7 @@ const path    = require('path');
 const { MongoClient } = require('mongodb');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const EXCEL_FILE = path.join(__dirname, '../../../Patient Tracking Dashboard - Stahl Edits v3 (1) (1).xlsm');
+const EXCEL_FILE = path.join(__dirname, '../../../Patient Tracking Dashboard - INSIGHT upload.xlsm');
 const TENANT_ID  = 'insightfulmind-psych';   // set during setup
 
 // ── Excel serial date → JS Date ───────────────────────────────────────────────
@@ -297,12 +297,7 @@ async function main() {
     console.log(`✅  Inserted ${result.insertedCount} patients`);
   }
 
-  // ── Insert leads ──────────────────────────────────────────────────────────
-  if (leads.length > 0) {
-    console.log(`📥  Inserting ${leads.length} leads…`);
-    const result = await db.collection('leads').insertMany(leads, { ordered: false });
-    console.log(`✅  Inserted ${result.insertedCount} leads`);
-  }
+  // Leads import skipped — do not modify leads collection
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const totalP = await db.collection('patients').countDocuments({ tenantId: TENANT_ID });
