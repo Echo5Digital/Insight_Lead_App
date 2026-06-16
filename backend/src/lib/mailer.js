@@ -58,27 +58,94 @@ async function sendNewLeadEmail({ tenantId, name, email, phone, source }) {
     return;
   }
 
-  const displayName  = name  || '(no name)';
-  const displayEmail = email || '(no email)';
-  const displayPhone = phone || '(no phone)';
-  const displaySource = source || 'website';
+  const displayName   = name   || 'Not provided';
+  const displayEmail  = email  || 'Not provided';
+  const displayPhone  = phone  || 'Not provided';
+  const displaySource = source || 'Website';
 
-  const subject = `New Web Lead: ${displayName}`;
+  const now = new Date().toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  });
+
+  const subject = `[Insight] New Patient Inquiry — ${displayName}`;
   const html = `
-    <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
-      <h2 style="color:#1e40af">New Website Lead</h2>
-      <table style="width:100%;border-collapse:collapse">
-        <tr><td style="padding:6px 0;color:#64748b;width:100px">Name</td><td style="padding:6px 0;font-weight:600">${displayName}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Email</td><td style="padding:6px 0">${displayEmail}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Phone</td><td style="padding:6px 0">${displayPhone}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Source</td><td style="padding:6px 0">${displaySource}</td></tr>
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1e3a5f;border-radius:8px 8px 0 0;padding:28px 32px">
+            <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase">Insight Patient Portal</p>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:700">New Patient Inquiry Received</h1>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background:#ffffff;padding:32px">
+
+            <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6">
+              A new prospective patient has submitted an inquiry through the website. Please review the details below and follow up at your earliest convenience.
+            </p>
+
+            <!-- Info table -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+              <tr style="background:#f8fafc">
+                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;width:130px;border-bottom:1px solid #e5e7eb">Full Name</td>
+                <td style="padding:10px 16px;color:#111827;font-size:14px;font-weight:600;border-bottom:1px solid #e5e7eb">${displayName}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb">Email</td>
+                <td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${displayEmail}</td>
+              </tr>
+              <tr style="background:#f8fafc">
+                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb">Phone</td>
+                <td style="padding:10px 16px;color:#111827;font-size:14px;border-bottom:1px solid #e5e7eb">${displayPhone}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Referral Source</td>
+                <td style="padding:10px 16px;color:#111827;font-size:14px">${displaySource}</td>
+              </tr>
+            </table>
+
+            <p style="margin:20px 0 4px;color:#6b7280;font-size:12px">Received on: ${now}</p>
+
+            <!-- CTA button -->
+            <table cellpadding="0" cellspacing="0" style="margin-top:28px">
+              <tr>
+                <td style="background:#1e3a5f;border-radius:6px">
+                  <a href="${process.env.APP_URL || ''}/leads"
+                     style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;letter-spacing:0.3px">
+                    View Lead in CRM &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:20px 32px">
+            <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6">
+              This is an automated notification from the Insight Patient Portal CRM system.<br>
+              Please do not reply directly to this email.
+            </p>
+          </td>
+        </tr>
+
       </table>
-      <p style="margin-top:20px">
-        <a href="${process.env.APP_URL || ''}/leads" style="background:#1e40af;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
-          View in CRM
-        </a>
-      </p>
-    </div>
+    </td></tr>
+  </table>
+</body>
+</html>
   `;
 
   try {
